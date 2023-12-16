@@ -25,4 +25,34 @@ def main():  # pragma: no cover
         * List all available tasks
         * Run an application (Flask, FastAPI, Django, etc.)
     """
-    print("This will do something")
+    print(
+        "This will do something blah blah blah blah lbah blah blah "
+        "blah blah blah blah blah blah blah blah blah blah blah"
+    )
+    print(
+        1
+        + 123
+        + 123123
+        + 123123
+        + 123123
+        + 123123
+        + 123123
+        + 123123
+        + 123123
+        + 123123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+        + 123
+    )

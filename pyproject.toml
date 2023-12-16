@@ -1,0 +1,6 @@
+[tool.ruff]
+extend-select = ["C4", "E", "F", "I", "NPY", "PD", "PT", "SIM", "TCH", "W"]
+target-version = "py310"
+
+# change the default line length number or characters.
+line-length = 120

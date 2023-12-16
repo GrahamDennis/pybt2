@@ -25,17 +25,15 @@ install:          ## Install the project in dev mode.
 	$(ENV_PREFIX)pip install -e .[test]
 
 .PHONY: fmt
-fmt:              ## Format code using black & isort.
-	$(ENV_PREFIX)isort pybt2/
-	$(ENV_PREFIX)black -l 79 pybt2/
-	$(ENV_PREFIX)black -l 79 tests/
+fmt:              
+	$(ENV_PREFIX)ruff format pybt2/ tests/
+	$(ENV_PREFIX)ruff check --fix pybt2/ tests/
+
 
 .PHONY: lint
 lint:             ## Run pep8, black, mypy linters.
-	$(ENV_PREFIX)flake8 pybt2/
-	$(ENV_PREFIX)black -l 79 --check pybt2/
-	$(ENV_PREFIX)black -l 79 --check tests/
-	$(ENV_PREFIX)mypy --ignore-missing-imports pybt2/
+	$(ENV_PREFIX)ruff check pybt2/ tests/
+	$(ENV_PREFIX)mypy --ignore-missing-imports pybt2/ tests/
 
 .PHONY: test
 test: lint        ## Run tests and generate coverage report.
