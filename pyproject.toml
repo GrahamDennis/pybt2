@@ -1,5 +1,5 @@
 [tool.ruff]
-extend-select = ["C4", "E", "F", "I", "NPY", "PD", "PT", "SIM", "TCH", "W"]
+extend-select = ["C4", "E", "F", "G", "I", "NPY", "PD", "PT", "RUF", "SIM", "TCH", "W"]
 target-version = "py310"
 
 # change the default line length number or characters.
