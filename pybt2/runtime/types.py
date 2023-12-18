@@ -8,7 +8,7 @@ KeyPath = tuple[Key, ...]
 PropsT = TypeVar("PropsT")
 ResultT = TypeVar("ResultT")
 StateT = TypeVar("StateT")
-UpdatesT = TypeVar("UpdatesT")
+UpdateT = TypeVar("UpdatesT")
 
 
 @frozen
