@@ -1,5 +1,5 @@
 import operator
-from typing import TYPE_CHECKING, Callable, Generic, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Generic, Iterator, Optional
 
 from attr import frozen
 
@@ -27,7 +27,7 @@ class FunctionCallFrameType(CallFrameType[PropsT, ResultT, None, None], Generic[
         fibre: "Fibre",
         props: PropsT,
         previous_result: Optional[CallFrameResult[ResultT, None]],
-        _enqueued_updates: Optional[Sequence[None]],
+        _enqueued_updates: Iterator[None],
     ) -> CallFrameResult[ResultT, None]:
         ctx = ExecutingCallFrame()
 

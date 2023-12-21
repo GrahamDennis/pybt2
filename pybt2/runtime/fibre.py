@@ -1,17 +1,18 @@
+import itertools
 from abc import ABCMeta, abstractmethod
 from collections import deque
-from typing import Any, Generic, Iterator, MutableMapping, Optional, Sequence, Set
+from typing import Any, Generic, Iterator, Mapping, MutableMapping, Optional, Set
 
 from attr import Factory, field, frozen, mutable, setters
 
-from pybt2.runtime.exceptions import ChildAlreadyExistsError
 from pybt2.runtime.types import CallFrameResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
 
-_EMPTY_FIBRE_NODE_TUPLE: tuple["FibreNode", ...] = ()
+_EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
 @frozen
 class CallFrameType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta):
+    # FIXME: this should become 'FibreNodeType'
     @abstractmethod
     def display_name(self) -> str:
         ...
@@ -25,7 +26,7 @@ class CallFrameType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta
         fibre: "Fibre",
         props: PropsT,
         previous_result: Optional[CallFrameResult[ResultT, StateT]],
-        enqueued_updates: Optional[Sequence[UpdateT]],
+        enqueued_updates: Iterator[UpdateT],
     ) -> CallFrameResult[ResultT, StateT]:
         ...
 
@@ -39,62 +40,36 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     props: PropsT
     dependencies_version: int
     call_frame_result: CallFrameResult[ResultT, StateT]
+    children: Optional[Mapping[Key, "FibreNode"]]
 
 
 @frozen
 class FibreNodeExecutionToken(Generic[PropsT, UpdateT]):
+    # FIXME: this should become 'ExecutingFibreNode'
     props: PropsT
     dependencies_version: int
+    _previous_children: Optional[Mapping[Key, "FibreNode"]]
     _enqueued_updates: Optional[list[UpdateT]]
-    enqueued_updates_slice: slice
+    enqueued_updates_stop: int
 
-    def get_enqueued_updates(self) -> Optional[list[UpdateT]]:
+    def get_enqueued_updates(self) -> Iterator[UpdateT]:
         if self._enqueued_updates is None:
-            return None
+            return _EMPTY_ITERATOR
         else:
-            return self._enqueued_updates[self.enqueued_updates_slice]
+            return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
 
 
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     key_path: KeyPath = field(on_setattr=setters.frozen)
     call_frame_type: CallFrameType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
-    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen, default=None)
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
 
     _fibre_node_state: Optional[FibreNodeState[PropsT, ResultT, StateT]] = None
     _next_dependencies_version: int = 1
-    _children: Optional[MutableMapping[Key, "FibreNode"]] = None
 
     _enqueued_updates: Optional[list[UpdateT]] = None
     _successors: Optional[Set["FibreNode"]] = None
-
-    def __getitem__(self, child_key: Key) -> "FibreNode":
-        if self._children is None:
-            raise KeyError(child_key)
-        else:
-            return self._children[child_key]
-
-    def __setitem__(self, child_key: Key, child_fibre_node: "FibreNode") -> None:
-        if self._children is None:
-            self._children = {child_key: child_fibre_node}
-        elif child_key in self._children:
-            raise ChildAlreadyExistsError(
-                key=child_key, existing_child=self._children[child_key], new_child=child_fibre_node
-            )
-        else:
-            self._children[child_key] = child_fibre_node
-
-    def __delitem__(self, child_key: Key) -> None:
-        if self._children is None:
-            raise KeyError(child_key)
-        else:
-            del self._children[child_key]
-
-    def __iter__(self) -> Iterator["FibreNode"]:
-        if self._children is None:
-            return iter(_EMPTY_FIBRE_NODE_TUPLE)
-        else:
-            return iter(self._children.values())
 
     def add_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:
@@ -110,7 +85,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
     def iter_successors(self) -> Iterator["FibreNode"]:
         if self._successors is None:
-            return iter(_EMPTY_FIBRE_NODE_TUPLE)
+            return _EMPTY_ITERATOR
         else:
             return iter(self._successors)
 
@@ -130,10 +105,9 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         return FibreNodeExecutionToken(
             props=props,
             dependencies_version=self._next_dependencies_version,
+            previous_children=self._fibre_node_state.children if self._fibre_node_state is not None else None,
             enqueued_updates=self._enqueued_updates,
-            enqueued_updates_slice=slice(len(self._enqueued_updates))
-            if self._enqueued_updates is not None
-            else slice(0),
+            enqueued_updates_stop=len(self._enqueued_updates) if self._enqueued_updates is not None else 0,
         )
 
     def get_fibre_node_state(self) -> Optional[FibreNodeState[PropsT, ResultT, StateT]]:
@@ -172,17 +146,41 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             enqueued_updates=execution_token.get_enqueued_updates(),
         )
 
+        next_children: Optional[MutableMapping[Key, FibreNode]] = None
+        for predecessor in next_call_frame_result.predecessors:
+            if predecessor.parent is self:
+                if next_children is None:
+                    next_children = {self.key_path[-1]: predecessor}
+                else:
+                    next_children[self.key_path[-1]] = predecessor
+
         next_fibre_node_state = FibreNodeState(
             props=execution_token.props,
             dependencies_version=execution_token.dependencies_version,
             call_frame_result=next_call_frame_result,
+            children=next_children,
         )
 
         self._fibre_node_state = next_fibre_node_state
+
+        if (
+            previous_fibre_node_state is not None
+            and (previous_children := previous_fibre_node_state.children) is not None
+        ):
+            for key, previous_child in previous_children.items():
+                if next_children is None or next_children[key] is not previous_child:
+                    previous_child.dispose()
         if self._enqueued_updates is not None:
-            del self._enqueued_updates[execution_token.enqueued_updates_slice]
+            del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
         return next_fibre_node_state
+
+    def dispose(self) -> None:
+        if (fibre_node_state := self._fibre_node_state) is not None:
+            if fibre_node_state.children is not None:
+                for child in fibre_node_state.children.values():
+                    child.dispose()
+            self.call_frame_type.dispose(fibre_node_state.call_frame_result)
 
 
 @mutable
