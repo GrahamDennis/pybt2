@@ -31,6 +31,7 @@ class FunctionCallFrameType(CallFrameType[PropsT, ResultT, None, None], Generic[
     ) -> CallFrameResult[ResultT, None]:
         ctx = ExecutingCallFrame()
 
+        # FIXME: This function could yield if we go that way
         result = self._fn(ctx, props)
         next_result_version: int
         if previous_result is None:

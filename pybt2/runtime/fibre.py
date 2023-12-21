@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, ClassVar, Generic, Iterator, MutableMapping, Optional, Sequence, Set
+from collections import deque
+from typing import Any, Generic, Iterator, MutableMapping, Optional, Sequence, Set
 
-from attr import field, frozen, mutable, setters
+from attr import Factory, field, frozen, mutable, setters
 
 from pybt2.runtime.exceptions import ChildAlreadyExistsError
 from pybt2.runtime.types import CallFrameResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
@@ -41,46 +42,24 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
 
 
 @frozen
-class AbstractEnqueuedUpdatesToken(Generic[UpdateT], metaclass=ABCMeta):
-    @abstractmethod
-    def get_enqueued_updates(self) -> Optional[list[UpdateT]]:
-        ...
-
-    @abstractmethod
-    def consume_enqueued_updates(self) -> None:
-        ...
-
-
-@frozen
-class EnqueuedUpdatesToken(AbstractEnqueuedUpdatesToken[UpdateT], Generic[UpdateT]):
-    _enqueued_updates: list[UpdateT]
-    _slice: slice
+class FibreNodeExecutionToken(Generic[PropsT, UpdateT]):
+    props: PropsT
+    dependencies_version: int
+    _enqueued_updates: Optional[list[UpdateT]]
+    enqueued_updates_slice: slice
 
     def get_enqueued_updates(self) -> Optional[list[UpdateT]]:
-        return self._enqueued_updates[self._slice]
-
-    def consume_enqueued_updates(self) -> None:
-        del self._enqueued_updates[self._slice]
-
-
-@frozen
-class EmptyEnqueuedUpdatesToken(AbstractEnqueuedUpdatesToken[Any]):
-    def get_enqueued_updates(self) -> Optional[list[UpdateT]]:
-        return None
-
-    def consume_enqueued_updates(self) -> None:
-        pass
-
-
-_EMPTY_ENQUEUED_UPDATES_TOKEN = EmptyEnqueuedUpdatesToken()
+        if self._enqueued_updates is None:
+            return None
+        else:
+            return self._enqueued_updates[self.enqueued_updates_slice]
 
 
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
-    _NO_CHILDREN: ClassVar[MutableMapping[Key, "FibreNode"]] = {}
-
     key_path: KeyPath = field(on_setattr=setters.frozen)
-    type: CallFrameType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
+    call_frame_type: CallFrameType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen, default=None)
 
     _fibre_node_state: Optional[FibreNodeState[PropsT, ResultT, StateT]] = None
     _next_dependencies_version: int = 1
@@ -142,11 +121,20 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             self._enqueued_updates.append(update)
         self._next_dependencies_version += 1
 
-    def get_enqueued_updates_token(self) -> AbstractEnqueuedUpdatesToken[UpdateT]:
-        if self._enqueued_updates is None:
-            return _EMPTY_ENQUEUED_UPDATES_TOKEN
-        else:
-            return EnqueuedUpdatesToken(self._enqueued_updates, slice(len(self._enqueued_updates)))
+    def create_execution_token(self, props: PropsT) -> FibreNodeExecutionToken[PropsT, UpdateT]:
+        if self._fibre_node_state is not None and not self.call_frame_type.are_props_equal(
+            self._fibre_node_state.props, props
+        ):
+            self._next_dependencies_version += 1
+
+        return FibreNodeExecutionToken(
+            props=props,
+            dependencies_version=self._next_dependencies_version,
+            enqueued_updates=self._enqueued_updates,
+            enqueued_updates_slice=slice(len(self._enqueued_updates))
+            if self._enqueued_updates is not None
+            else slice(0),
+        )
 
     def get_fibre_node_state(self) -> Optional[FibreNodeState[PropsT, ResultT, StateT]]:
         return self._fibre_node_state
@@ -163,48 +151,59 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     def __eq__(self, other: Any) -> bool:
         return other is self
 
-    def commit_fibre_node_state(
-        self,
-        next_fibre_node_state: FibreNodeState[PropsT, ResultT, StateT],
-        enqueued_updates_token: AbstractEnqueuedUpdatesToken[UpdateT],
-    ) -> None:
+    def run(
+        self, fibre: "Fibre", execution_token: FibreNodeExecutionToken[PropsT, UpdateT], force: bool = False
+    ) -> FibreNodeState[PropsT, ResultT, StateT]:
+        previous_fibre_node_state = self._fibre_node_state
+        previous_call_frame_result = (
+            previous_fibre_node_state.call_frame_result if previous_fibre_node_state is not None else None
+        )
+        if (
+            not force
+            and previous_fibre_node_state is not None
+            and execution_token.dependencies_version == previous_fibre_node_state.dependencies_version
+        ):
+            return previous_fibre_node_state
+
+        next_call_frame_result = self.call_frame_type.run(
+            fibre=fibre,
+            props=execution_token.props,
+            previous_result=previous_call_frame_result,
+            enqueued_updates=execution_token.get_enqueued_updates(),
+        )
+
+        next_fibre_node_state = FibreNodeState(
+            props=execution_token.props,
+            dependencies_version=execution_token.dependencies_version,
+            call_frame_result=next_call_frame_result,
+        )
+
         self._fibre_node_state = next_fibre_node_state
-        enqueued_updates_token.consume_enqueued_updates()
+        if self._enqueued_updates is not None:
+            del self._enqueued_updates[execution_token.enqueued_updates_slice]
+
+        return next_fibre_node_state
 
 
 @mutable
 class Fibre:
-    root: Optional[FibreNode] = None
+    _root: Optional[FibreNode] = None
+    _work_queue: deque[FibreNode] = Factory(deque)
+    _evaluation_stack: list[FibreNode] = Factory(list)
 
     def run(
-        self, fibre_node: FibreNode, call_frame_type: CallFrameType[PropsT, ResultT, StateT, UpdateT], props: PropsT
+        self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
         previous_fibre_node_state = fibre_node.get_fibre_node_state()
-        previous_result: Optional[CallFrameResult[ResultT, StateT]] = None
-        if previous_fibre_node_state is not None:
-            if not call_frame_type.are_props_equal(previous_fibre_node_state.props, props):
-                fibre_node.increment_next_dependencies_version()
-            elif fibre_node.get_next_dependencies_version() == previous_fibre_node_state.dependencies_version:
-                return previous_fibre_node_state
-            previous_result = previous_fibre_node_state.call_frame_result
+        fibre_node_execution_token: FibreNodeExecutionToken[PropsT, UpdateT] = fibre_node.create_execution_token(props)
 
-        current_dependencies_version = fibre_node.get_next_dependencies_version()
-        enqueued_updates_token: AbstractEnqueuedUpdatesToken[UpdateT] = fibre_node.get_enqueued_updates_token()
-        current_result = call_frame_type.run(
-            fibre=self,
-            props=props,
-            previous_result=previous_result,
-            enqueued_updates=enqueued_updates_token.get_enqueued_updates(),
-        )
+        try:
+            self._evaluation_stack.append(fibre_node)
+            current_fibre_node_state = fibre_node.run(fibre=self, execution_token=fibre_node_execution_token)
+        finally:
+            self._evaluation_stack.pop()
 
-        current_fibre_node_state = FibreNodeState(
-            props=props,
-            dependencies_version=current_dependencies_version,
-            call_frame_result=current_result,
-        )
-
-        fibre_node.commit_fibre_node_state(current_fibre_node_state, enqueued_updates_token)
-
+        # Update successors if required
         if (
             previous_fibre_node_state is None
             or previous_fibre_node_state.call_frame_result.predecessors
@@ -225,4 +224,30 @@ class Fibre:
             for predecessor_to_remove in predecessors_to_remove:
                 predecessor_to_remove.remove_successor(fibre_node)
 
+        # if the result is out of date, then we need to update all successors
+        if (
+            previous_fibre_node_state is not None
+            and previous_fibre_node_state.call_frame_result.result_version
+            != current_fibre_node_state.call_frame_result.result_version
+        ):
+            # Don't bump the parent's dependency version if it's being evaluated. If the parent is being evaluated,
+            # it's always the last element of the evaluation stack (if present).
+            if len(self._evaluation_stack) == 0 and fibre_node.parent is not None:
+                self.mark_as_out_of_date(fibre_node.parent)
+
+            # bump the dependency version
+            for successor in fibre_node.iter_successors():
+                self.mark_as_out_of_date(successor)
+
         return current_fibre_node_state
+
+    def mark_as_out_of_date(self, fibre_node: FibreNode) -> None:
+        fibre_node_state = fibre_node.get_fibre_node_state()
+        if (
+            fibre_node_state is not None
+            and fibre_node_state.dependencies_version == fibre_node.get_next_dependencies_version()
+        ):
+            self._work_queue.append(fibre_node)
+        else:
+            assert fibre_node in self._work_queue
+        fibre_node.increment_next_dependencies_version()
