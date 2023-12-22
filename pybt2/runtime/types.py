@@ -1,6 +1,6 @@
 from typing import Collection, Generic, Optional, TypeVar
 
-from attr import Factory, field, frozen, mutable
+from attr import field, frozen
 
 from pybt2.runtime.fibre import FibreNode
 
@@ -12,31 +12,19 @@ ResultT = TypeVar("ResultT")
 StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
 
-_EMPTY_PREDECESSORS: tuple[FibreNode, ...] = ()
+EMPTY_PREDECESSORS: tuple[FibreNode, ...] = ()
 
 
-def _predecessor_converter(predecessors: Optional[Collection[FibreNode]]) -> Collection[FibreNode]:
+def from_optional_predecessors(predecessors: Optional[Collection[FibreNode]]) -> Collection[FibreNode]:
     if predecessors is None:
-        return _EMPTY_PREDECESSORS
+        return EMPTY_PREDECESSORS
     else:
         return predecessors
 
 
 @frozen
-class CallFrameResult(Generic[ResultT, StateT]):
-    # This should probably be FibreNodeResult
+class FibreNodeResult(Generic[ResultT, StateT]):
     result: ResultT
     result_version: int
     state: StateT
-    predecessors: Collection[FibreNode] = field(converter=_predecessor_converter)
-
-
-@mutable
-class ExecutingCallFrame:
-    _predecessors: list[FibreNode] = Factory(list)
-
-    def get_predecessors(self) -> Optional[Collection[FibreNode]]:
-        if self._predecessors is None:
-            return None
-        else:
-            return tuple(self._predecessors)
+    predecessors: Collection[FibreNode] = field(converter=from_optional_predecessors)

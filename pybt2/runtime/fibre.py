@@ -5,14 +5,13 @@ from typing import Any, Generic, Iterator, Optional, Set
 
 from attr import Factory, field, frozen, mutable, setters
 
-from pybt2.runtime.types import CallFrameResult, KeyPath, PropsT, ResultT, StateT, UpdateT
+from pybt2.runtime.types import FibreNodeResult, Key, PropsT, ResultT, StateT, UpdateT
 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
 @frozen
-class CallFrameType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta):
-    # FIXME: this should become 'FibreNodeType'
+class FibreNodeType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta):
     @abstractmethod
     def display_name(self) -> str:
         ...
@@ -24,14 +23,15 @@ class CallFrameType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta
     def run(
         self,
         fibre: "Fibre",
+        fibre_node: "FibreNode[PropsT, ResultT, StateT, UpdateT]",
         props: PropsT,
-        previous_result: Optional[CallFrameResult[ResultT, StateT]],
+        previous_result: Optional[FibreNodeResult[ResultT, StateT]],
         enqueued_updates: Iterator[UpdateT],
-    ) -> CallFrameResult[ResultT, StateT]:
+    ) -> FibreNodeResult[ResultT, StateT]:
         ...
 
     @abstractmethod
-    def dispose(self, result: CallFrameResult[ResultT, StateT]) -> None:
+    def dispose(self, result: FibreNodeResult[ResultT, StateT]) -> None:
         ...
 
 
@@ -39,13 +39,11 @@ class CallFrameType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta
 class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     props: PropsT
     dependencies_version: int
-    call_frame_result: CallFrameResult[ResultT, StateT]
+    fibre_node_result: FibreNodeResult[ResultT, StateT]
 
 
 @frozen
-class FibreNodeExecutionToken(Generic[PropsT, UpdateT]):
-    # FIXME: this should become 'ExecutingFibreNode'
-    props: PropsT
+class FibreNodeExecutionToken(Generic[UpdateT]):
     dependencies_version: int
     _enqueued_updates: Optional[list[UpdateT]]
     enqueued_updates_stop: int
@@ -59,8 +57,8 @@ class FibreNodeExecutionToken(Generic[PropsT, UpdateT]):
 
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
-    key_path: KeyPath = field(on_setattr=setters.frozen)
-    call_frame_type: CallFrameType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
+    key: Key = field(on_setattr=setters.frozen)
+    fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
 
     _fibre_node_state: Optional[FibreNodeState[PropsT, ResultT, StateT]] = None
@@ -94,14 +92,8 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             self._enqueued_updates.append(update)
         self._next_dependencies_version += 1
 
-    def create_execution_token(self, props: PropsT) -> FibreNodeExecutionToken[PropsT, UpdateT]:
-        if self._fibre_node_state is not None and not self.call_frame_type.are_props_equal(
-            self._fibre_node_state.props, props
-        ):
-            self._next_dependencies_version += 1
-
+    def _create_execution_token(self) -> FibreNodeExecutionToken[UpdateT]:
         return FibreNodeExecutionToken(
-            props=props,
             dependencies_version=self._next_dependencies_version,
             enqueued_updates=self._enqueued_updates,
             enqueued_updates_stop=len(self._enqueued_updates) if self._enqueued_updates is not None else 0,
@@ -122,13 +114,17 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     def __eq__(self, other: Any) -> bool:
         return other is self
 
-    def run(
-        self, fibre: "Fibre", execution_token: FibreNodeExecutionToken[PropsT, UpdateT], force: bool = False
-    ) -> FibreNodeState[PropsT, ResultT, StateT]:
+    def run(self, fibre: "Fibre", props: PropsT, force: bool = False) -> FibreNodeState[PropsT, ResultT, StateT]:
         previous_fibre_node_state = self._fibre_node_state
-        previous_call_frame_result = (
-            previous_fibre_node_state.call_frame_result if previous_fibre_node_state is not None else None
+        previous_fibre_node_result = (
+            previous_fibre_node_state.fibre_node_result if previous_fibre_node_state is not None else None
         )
+        if previous_fibre_node_state is not None and not self.fibre_node_type.are_props_equal(
+            previous_fibre_node_state.props, props
+        ):
+            self._next_dependencies_version += 1
+
+        execution_token = self._create_execution_token()
         if (
             not force
             and previous_fibre_node_state is not None
@@ -136,28 +132,29 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         ):
             return previous_fibre_node_state
 
-        next_call_frame_result = self.call_frame_type.run(
+        next_fibre_node_result = self.fibre_node_type.run(
             fibre=fibre,
-            props=execution_token.props,
-            previous_result=previous_call_frame_result,
+            fibre_node=self,
+            props=props,
+            previous_result=previous_fibre_node_result,
             enqueued_updates=execution_token.get_enqueued_updates(),
         )
 
         next_fibre_node_state = FibreNodeState(
-            props=execution_token.props,
+            props=props,
             dependencies_version=execution_token.dependencies_version,
-            call_frame_result=next_call_frame_result,
+            fibre_node_result=next_fibre_node_result,
         )
 
         self._fibre_node_state = next_fibre_node_state
 
         if (
-            previous_call_frame_result is not None
-            and previous_call_frame_result.predecessors is not None
-            and previous_call_frame_result.predecessors != next_call_frame_result.predecessors
+            previous_fibre_node_result is not None
+            and previous_fibre_node_result.predecessors is not None
+            and previous_fibre_node_result.predecessors != next_fibre_node_result.predecessors
         ):
-            next_children = {child for child in next_call_frame_result.predecessors if child.parent is self}
-            for previous_child in previous_call_frame_result.predecessors:
+            next_children = {child for child in next_fibre_node_result.predecessors if child.parent is self}
+            for previous_child in previous_fibre_node_result.predecessors:
                 if previous_child.parent is not self or previous_child in next_children:
                     continue
                 previous_child.dispose()
@@ -168,11 +165,11 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
-            if (predecessors := fibre_node_state.call_frame_result.predecessors) is not None:
+            if (predecessors := fibre_node_state.fibre_node_result.predecessors) is not None:
                 for predecessor in predecessors:
                     if predecessor.parent is self:
                         predecessor.dispose()
-            self.call_frame_type.dispose(fibre_node_state.call_frame_result)
+            self.fibre_node_type.dispose(fibre_node_state.fibre_node_result)
 
 
 @mutable
@@ -185,26 +182,25 @@ class Fibre:
         self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
         previous_fibre_node_state = fibre_node.get_fibre_node_state()
-        fibre_node_execution_token: FibreNodeExecutionToken[PropsT, UpdateT] = fibre_node.create_execution_token(props)
 
         try:
             self._evaluation_stack.append(fibre_node)
-            current_fibre_node_state = fibre_node.run(fibre=self, execution_token=fibre_node_execution_token)
+            current_fibre_node_state = fibre_node.run(fibre=self, props=props)
         finally:
             self._evaluation_stack.pop()
 
         # Update successors if required
         if (
             previous_fibre_node_state is None
-            or previous_fibre_node_state.call_frame_result.predecessors
-            != current_fibre_node_state.call_frame_result.predecessors
+            or previous_fibre_node_state.fibre_node_result.predecessors
+            != current_fibre_node_state.fibre_node_result.predecessors
         ):
             previous_predecessors: set[FibreNode] = (
-                set(previous_fibre_node_state.call_frame_result.predecessors)
+                set(previous_fibre_node_state.fibre_node_result.predecessors)
                 if previous_fibre_node_state is not None
                 else set()
             )
-            current_predecessors = set(current_fibre_node_state.call_frame_result.predecessors)
+            current_predecessors = set(current_fibre_node_state.fibre_node_result.predecessors)
 
             predecessors_to_add = current_predecessors.difference(previous_predecessors)
             predecessors_to_remove = previous_predecessors.difference(current_predecessors)
@@ -217,8 +213,8 @@ class Fibre:
         # if the result is out of date, then we need to update all successors
         if (
             previous_fibre_node_state is not None
-            and previous_fibre_node_state.call_frame_result.result_version
-            != current_fibre_node_state.call_frame_result.result_version
+            and previous_fibre_node_state.fibre_node_result.result_version
+            != current_fibre_node_state.fibre_node_result.result_version
         ):
             # Don't bump the parent's dependency version if it's being evaluated. If the parent is being evaluated,
             # it's always the last element of the evaluation stack (if present).
