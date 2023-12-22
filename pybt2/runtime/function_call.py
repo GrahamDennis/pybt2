@@ -3,6 +3,7 @@ from typing import Callable, Collection, Generic, Iterator, Optional
 
 from attr import frozen, mutable
 
+from pybt2.runtime.exceptions import ChildAlreadyExistsError
 from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
 from pybt2.runtime.types import (
     EMPTY_PREDECESSORS,
@@ -36,7 +37,7 @@ class FunctionCallContext:
             if predecessor.parent is not self:
                 pass
             if predecessor.key == key:
-                raise KeyError(key)
+                raise ChildAlreadyExistsError(key, existing_child=predecessor)
 
     def _next_child_key(self, optional_key: Optional[Key]) -> Key:
         if optional_key is not None:

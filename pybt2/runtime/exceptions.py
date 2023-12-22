@@ -12,4 +12,3 @@ if TYPE_CHECKING:
 class ChildAlreadyExistsError(Exception):
     key: Key
     existing_child: "FibreNode"
-    new_child: "FibreNode"
