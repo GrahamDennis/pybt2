@@ -13,9 +13,8 @@ _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 @frozen
 class FibreNodeType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta):
-    @abstractmethod
     def display_name(self) -> str:
-        ...
+        return str(self)
 
     def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
         return left == right

@@ -1,9 +1,10 @@
 import operator
-from typing import Callable, Collection, Generic, Iterator, Optional
+from abc import abstractmethod
+from typing import Callable, Collection, Generic, Iterator, Optional, Protocol, Type
 
 from attr import frozen, mutable
 
-from pybt2.runtime.exceptions import ChildAlreadyExistsError
+from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError
 from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
 from pybt2.runtime.types import (
     EMPTY_PREDECESSORS,
@@ -17,7 +18,7 @@ from pybt2.runtime.types import (
 
 
 @mutable
-class FunctionCallContext:
+class CallContext:
     _fibre: Fibre
     _fibre_node: FibreNode
     _previous_predecessors: Collection[FibreNode]
@@ -79,14 +80,46 @@ class FunctionCallContext:
             return tuple(self._predecessors)
 
 
+class RuntimeCallableFunction(Protocol[PropsT, ResultT]):
+    @abstractmethod
+    def __call__(self, ctx: CallContext, props: PropsT) -> ResultT:
+        ...
+
+
+CallableProps = Callable[[CallContext], ResultT]
+
+
+@frozen
+class CallablePropsWrapper(RuntimeCallableFunction[CallableProps, ResultT]):
+    props_type: Type[CallableProps]
+
+    def __call__(self, ctx: CallContext, props: CallableProps) -> ResultT:
+        if not isinstance(props, self.props_type):
+            raise PropsTypeConflictError(props=props, expected_type=self.props_type)
+        return props(ctx)
+
+
 @frozen
 class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[PropsT, ResultT]):
-    _fn: Callable[[FunctionCallContext, PropsT], ResultT]
+    _fn: RuntimeCallableFunction[PropsT, ResultT]
     _props_eq: Callable[[PropsT, PropsT], bool] = operator.eq
     _result_eq: Callable[[ResultT, ResultT], bool] = operator.eq
 
-    def display_name(self) -> str:
-        return self._fn.__qualname__
+    @staticmethod
+    def create_from_function(
+        fn: RuntimeCallableFunction[PropsT, ResultT],
+        props_eq: Callable[[PropsT, PropsT], bool] = operator.eq,
+        result_eq: Callable[[ResultT, ResultT], bool] = operator.eq,
+    ) -> "FunctionFibreNodeType[PropsT, ResultT]":
+        return FunctionFibreNodeType(fn=fn, props_eq=props_eq, result_eq=result_eq)
+
+    @staticmethod
+    def create_from_callable_type(
+        props_type: Type[CallableProps],
+        props_eq: Callable[[CallableProps, CallableProps], bool] = operator.eq,
+        result_eq: Callable[[ResultT, ResultT], bool] = operator.eq,
+    ) -> "FunctionFibreNodeType[CallableProps, ResultT]":
+        return FunctionFibreNodeType(fn=CallablePropsWrapper(props_type), props_eq=props_eq, result_eq=result_eq)
 
     def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
         return self._props_eq(left, right)
@@ -99,7 +132,7 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
         previous_result: Optional[FibreNodeResult[ResultT, None]],
         _enqueued_updates: Iterator[None],
     ) -> FibreNodeResult[ResultT, None]:
-        ctx = FunctionCallContext(
+        ctx = CallContext(
             fibre=fibre,
             fibre_node=fibre_node,
             previous_predecessors=previous_result.predecessors if previous_result is not None else EMPTY_PREDECESSORS,
