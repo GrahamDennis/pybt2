@@ -5,7 +5,8 @@ from typing import Any, Generic, Iterator, Optional, Set
 
 from attr import Factory, field, frozen, mutable, setters
 
-from pybt2.runtime.types import FibreNodeResult, Key, PropsT, ResultT, StateT, UpdateT
+from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
+from pybt2.runtime.types import FibreNodeResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
@@ -55,11 +56,23 @@ class FibreNodeExecutionToken(Generic[UpdateT]):
             return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
 
 
+def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
+    reversed_key_path = [fibre_node.key]
+    node = fibre_node.parent
+    while node is not None:
+        reversed_key_path.append(node.key)
+        node = node.parent
+    return tuple(reversed(reversed_key_path))
+
+
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
     key: Key = field(on_setattr=setters.frozen)
     fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
-    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
+    key_path: KeyPath = field(
+        init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
+    )
 
     _fibre_node_state: Optional[FibreNodeState[PropsT, ResultT, StateT]] = None
     _next_dependencies_version: int = 1
@@ -177,6 +190,7 @@ class Fibre:
     _root: Optional[FibreNode] = None
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
+    _instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
 
     def run(
         self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
@@ -185,8 +199,10 @@ class Fibre:
 
         try:
             self._evaluation_stack.append(fibre_node)
+            self._instrumentation.on_node_evaluation_start(fibre_node)
             current_fibre_node_state = fibre_node.run(fibre=self, props=props)
         finally:
+            self._instrumentation.on_node_evaluation_end(fibre_node)
             self._evaluation_stack.pop()
 
         # Update successors if required
