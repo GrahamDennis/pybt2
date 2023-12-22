@@ -1,11 +1,11 @@
 import itertools
 from abc import ABCMeta, abstractmethod
 from collections import deque
-from typing import Any, Generic, Iterator, Mapping, MutableMapping, Optional, Set
+from typing import Any, Generic, Iterator, Optional, Set
 
 from attr import Factory, field, frozen, mutable, setters
 
-from pybt2.runtime.types import CallFrameResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
+from pybt2.runtime.types import CallFrameResult, KeyPath, PropsT, ResultT, StateT, UpdateT
 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
@@ -40,7 +40,6 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     props: PropsT
     dependencies_version: int
     call_frame_result: CallFrameResult[ResultT, StateT]
-    children: Optional[Mapping[Key, "FibreNode"]]
 
 
 @frozen
@@ -48,7 +47,6 @@ class FibreNodeExecutionToken(Generic[PropsT, UpdateT]):
     # FIXME: this should become 'ExecutingFibreNode'
     props: PropsT
     dependencies_version: int
-    _previous_children: Optional[Mapping[Key, "FibreNode"]]
     _enqueued_updates: Optional[list[UpdateT]]
     enqueued_updates_stop: int
 
@@ -105,7 +103,6 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         return FibreNodeExecutionToken(
             props=props,
             dependencies_version=self._next_dependencies_version,
-            previous_children=self._fibre_node_state.children if self._fibre_node_state is not None else None,
             enqueued_updates=self._enqueued_updates,
             enqueued_updates_stop=len(self._enqueued_updates) if self._enqueued_updates is not None else 0,
         )
@@ -146,30 +143,24 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             enqueued_updates=execution_token.get_enqueued_updates(),
         )
 
-        next_children: Optional[MutableMapping[Key, FibreNode]] = None
-        for predecessor in next_call_frame_result.predecessors:
-            if predecessor.parent is self:
-                if next_children is None:
-                    next_children = {self.key_path[-1]: predecessor}
-                else:
-                    next_children[self.key_path[-1]] = predecessor
-
         next_fibre_node_state = FibreNodeState(
             props=execution_token.props,
             dependencies_version=execution_token.dependencies_version,
             call_frame_result=next_call_frame_result,
-            children=next_children,
         )
 
         self._fibre_node_state = next_fibre_node_state
 
         if (
-            previous_fibre_node_state is not None
-            and (previous_children := previous_fibre_node_state.children) is not None
+            previous_call_frame_result is not None
+            and previous_call_frame_result.predecessors is not None
+            and previous_call_frame_result.predecessors != next_call_frame_result.predecessors
         ):
-            for key, previous_child in previous_children.items():
-                if next_children is None or next_children[key] is not previous_child:
-                    previous_child.dispose()
+            next_children = {child for child in next_call_frame_result.predecessors if child.parent is self}
+            for previous_child in previous_call_frame_result.predecessors:
+                if previous_child.parent is not self or previous_child in next_children:
+                    continue
+                previous_child.dispose()
         if self._enqueued_updates is not None:
             del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
@@ -177,9 +168,10 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
-            if fibre_node_state.children is not None:
-                for child in fibre_node_state.children.values():
-                    child.dispose()
+            if (predecessors := fibre_node_state.call_frame_result.predecessors) is not None:
+                for predecessor in predecessors:
+                    if predecessor.parent is self:
+                        predecessor.dispose()
             self.call_frame_type.dispose(fibre_node_state.call_frame_result)
 
 

@@ -24,6 +24,7 @@ def _predecessor_converter(predecessors: Optional[Collection[FibreNode]]) -> Col
 
 @frozen
 class CallFrameResult(Generic[ResultT, StateT]):
+    # This should probably be FibreNodeResult
     result: ResultT
     result_version: int
     state: StateT
