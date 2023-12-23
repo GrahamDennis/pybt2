@@ -1,8 +1,9 @@
-from typing import Collection, Generic, Optional, TypeVar
+from typing import TYPE_CHECKING, Collection, Generic, Optional, TypeVar
 
 from attr import field, frozen
 
-from pybt2.runtime.fibre import FibreNode
+if TYPE_CHECKING:
+    from pybt2.runtime.fibre import FibreNode
 
 Key = str | int
 KeyPath = tuple[Key, ...]
@@ -12,10 +13,10 @@ ResultT = TypeVar("ResultT", covariant=True)
 StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
 
-EMPTY_PREDECESSORS: tuple[FibreNode, ...] = ()
+EMPTY_PREDECESSORS: Collection["FibreNode"] = ()
 
 
-def from_optional_predecessors(predecessors: Optional[Collection[FibreNode]]) -> Collection[FibreNode]:
+def from_optional_predecessors(predecessors: Optional[Collection["FibreNode"]]) -> Collection["FibreNode"]:
     if predecessors is None:
         return EMPTY_PREDECESSORS
     else:
@@ -27,4 +28,4 @@ class FibreNodeResult(Generic[ResultT, StateT]):
     result: ResultT
     result_version: int
     state: StateT
-    predecessors: Collection[FibreNode] = field(converter=from_optional_predecessors)
+    predecessors: Collection["FibreNode"] = field(converter=from_optional_predecessors)

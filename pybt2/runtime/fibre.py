@@ -6,7 +6,7 @@ from typing import Any, Generic, Iterator, Optional, Set
 from attr import Factory, field, frozen, mutable, setters
 
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
-from pybt2.runtime.types import FibreNodeResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
+from pybt2.runtime.types import EMPTY_PREDECESSORS, FibreNodeResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
@@ -160,20 +160,39 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
         self._fibre_node_state = next_fibre_node_state
 
-        if (
-            previous_fibre_node_result is not None
-            and previous_fibre_node_result.predecessors is not None
-            and previous_fibre_node_result.predecessors != next_fibre_node_result.predecessors
-        ):
+        predecessors_changed = (
+            previous_fibre_node_result is None
+            or previous_fibre_node_result.predecessors != next_fibre_node_result.predecessors
+        )
+        # Handle change in predecessors
+        if predecessors_changed:
+            self._on_predecessors_changed(
+                previous_fibre_node_result=previous_fibre_node_result, next_fibre_node_result=next_fibre_node_result
+            )
+        if self._enqueued_updates is not None:
+            del self._enqueued_updates[: execution_token.enqueued_updates_stop]
+
+        return next_fibre_node_state
+
+    def _on_predecessors_changed(
+        self, *, previous_fibre_node_result: Optional[FibreNodeResult], next_fibre_node_result: FibreNodeResult
+    ) -> None:
+        previous_predecessors = (
+            previous_fibre_node_result.predecessors if previous_fibre_node_result is not None else EMPTY_PREDECESSORS
+        )
+        current_predecessors = next_fibre_node_result.predecessors
+        for previous_predecessor in previous_predecessors:
+            if previous_predecessor not in current_predecessors:
+                previous_predecessor.remove_successor(self)
+        for current_predecessor in current_predecessors:
+            if current_predecessor not in previous_predecessors:
+                current_predecessor.add_successor(self)
+        if previous_fibre_node_result is not None and previous_fibre_node_result.predecessors is not None:
             next_children = {child for child in next_fibre_node_result.predecessors if child.parent is self}
             for previous_child in previous_fibre_node_result.predecessors:
                 if previous_child.parent is not self or previous_child in next_children:
                     continue
                 previous_child.dispose()
-        if self._enqueued_updates is not None:
-            del self._enqueued_updates[: execution_token.enqueued_updates_stop]
-
-        return next_fibre_node_state
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
@@ -186,7 +205,6 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
 @mutable
 class Fibre:
-    _root: Optional[FibreNode] = None
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
     _instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
@@ -203,27 +221,6 @@ class Fibre:
         finally:
             self._instrumentation.on_node_evaluation_end(fibre_node)
             self._evaluation_stack.pop()
-
-        # Update successors if required
-        if (
-            previous_fibre_node_state is None
-            or previous_fibre_node_state.fibre_node_result.predecessors
-            != current_fibre_node_state.fibre_node_result.predecessors
-        ):
-            previous_predecessors: set[FibreNode] = (
-                set(previous_fibre_node_state.fibre_node_result.predecessors)
-                if previous_fibre_node_state is not None
-                else set()
-            )
-            current_predecessors = set(current_fibre_node_state.fibre_node_result.predecessors)
-
-            predecessors_to_add = current_predecessors.difference(previous_predecessors)
-            predecessors_to_remove = previous_predecessors.difference(current_predecessors)
-
-            for predecessor_to_add in predecessors_to_add:
-                predecessor_to_add.add_successor(fibre_node)
-            for predecessor_to_remove in predecessors_to_remove:
-                predecessor_to_remove.remove_successor(fibre_node)
 
         # if the result is out of date, then we need to update all successors
         if (
