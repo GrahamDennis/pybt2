@@ -56,12 +56,10 @@ class FibreNodeExecutionToken(Generic[UpdateT]):
 
 
 def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
-    reversed_key_path = [fibre_node.key]
-    node = fibre_node.parent
-    while node is not None:
-        reversed_key_path.append(node.key)
-        node = node.parent
-    return tuple(reversed(reversed_key_path))
+    if fibre_node.parent is None:
+        return (fibre_node.key,)
+    else:
+        return *fibre_node.parent.key_path, fibre_node.key
 
 
 @frozen
@@ -223,6 +221,17 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
                     if predecessor.parent is self:
                         predecessor.dispose()
             self.fibre_node_type.dispose(fibre_node_state.fibre_node_result)
+
+    def get_fibre_node(self, key_path: KeyPath) -> "FibreNode":
+        if key_path == self.key_path:
+            return self
+        current_key_path_length = len(self.key_path)
+        if key_path[:current_key_path_length] == self.key_path and self._fibre_node_state is not None:
+            child_key = key_path[current_key_path_length]
+            for predecessor in self._fibre_node_state.fibre_node_result.predecessors:
+                if predecessor.parent is self and predecessor.key == child_key:
+                    return predecessor.get_fibre_node(key_path)
+        raise KeyError(key_path)
 
 
 @mutable
