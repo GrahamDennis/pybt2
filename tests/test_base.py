@@ -123,9 +123,16 @@ def test_trivial():
 
     test_instrumentation.assert_evaluations_and_reset([("root",)])
 
-    # Re-evaluating the root with the same child changes nothing and the child doesn't get re-evaluated
+    # Re-evaluating the root with a different child does cause a re-evaluation
     @run_in_fibre(fibre, fibre_node)
     def execute_3(ctx: CallContext):
         assert ctx.evaluate_child(ReturnArgumentV2(2), key="child") == 2
 
     test_instrumentation.assert_evaluations_and_reset([("root",), ("root", "child")])
+
+    # Just run the child with new props
+    fibre.run(first_child, ReturnArgumentV2(3))
+
+    test_instrumentation.assert_evaluations_and_reset([("root", "child")])
+
+    assert fibre_node.get_next_dependencies_version() > fibre_node.get_fibre_node_state().dependencies_version
