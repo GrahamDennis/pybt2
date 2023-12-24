@@ -83,10 +83,10 @@ class FibreNodeIdentity(Generic[PropsT, ResultT, StateT, UpdateT]):
 
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
-    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
-    key: Key = field(on_setattr=setters.frozen)
-    fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
     # FIXME: should KeyPath be evaluated on demand or tuple(parent, key)
+    key: Key = field(on_setattr=setters.frozen)
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
+    fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
     )

@@ -4,3 +4,13 @@ target-version = "py310"
 
 # change the default line length number or characters.
 line-length = 120
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
+
+show_missing = true
+skip_covered = true
+skip_empty = true
