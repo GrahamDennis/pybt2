@@ -6,7 +6,7 @@ from typing import Any, Generic, Iterator, Optional, Set
 from attr import Factory, field, frozen, mutable, setters
 
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
-from pybt2.runtime.types import EMPTY_PREDECESSORS, FibreNodeResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
+from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeResult, Key, KeyPath, PropsT, ResultT, StateT, UpdateT
 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
@@ -62,6 +62,26 @@ def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
         reversed_key_path.append(node.key)
         node = node.parent
     return tuple(reversed(reversed_key_path))
+
+
+@frozen
+class FibreNodeIdentity(Generic[PropsT, ResultT, StateT, UpdateT]):
+    # Does parent belong here? Surely one of parent and key_path should be present
+    parent: Optional["FibreNode"]
+    key: Key
+    fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT]
+    key_path: KeyPath
+
+    @staticmethod
+    def create(
+        fibre_node: "FibreNode[PropsT, ResultT, StateT, UpdateT]",
+    ) -> "FibreNodeIdentity[PropsT, ResultT, StateT, UpdateT]":
+        return FibreNodeIdentity(
+            parent=fibre_node.parent,
+            key=fibre_node.key,
+            fibre_node_type=fibre_node.fibre_node_type,
+            key_path=fibre_node.key_path,
+        )
 
 
 @mutable(order=False)
@@ -178,7 +198,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         self, *, previous_fibre_node_result: Optional[FibreNodeResult], next_fibre_node_result: FibreNodeResult
     ) -> None:
         previous_predecessors = (
-            previous_fibre_node_result.predecessors if previous_fibre_node_result is not None else EMPTY_PREDECESSORS
+            previous_fibre_node_result.predecessors if previous_fibre_node_result is not None else NO_PREDECESSORS
         )
         current_predecessors = next_fibre_node_result.predecessors
         for previous_predecessor in previous_predecessors:

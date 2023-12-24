@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Collection, Generic, Optional, TypeVar
+from typing import TYPE_CHECKING, Generic, Optional, Sequence, TypeVar
 
 from attr import field, frozen
 
@@ -13,12 +13,12 @@ ResultT = TypeVar("ResultT", covariant=True)
 StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
 
-EMPTY_PREDECESSORS: Collection["FibreNode"] = ()
+NO_PREDECESSORS: Sequence["FibreNode"] = ()
 
 
-def from_optional_predecessors(predecessors: Optional[Collection["FibreNode"]]) -> Collection["FibreNode"]:
+def from_optional_predecessors(predecessors: Optional[Sequence["FibreNode"]]) -> Sequence["FibreNode"]:
     if predecessors is None:
-        return EMPTY_PREDECESSORS
+        return NO_PREDECESSORS
     else:
         return predecessors
 
@@ -28,4 +28,4 @@ class FibreNodeResult(Generic[ResultT, StateT]):
     result: ResultT
     result_version: int
     state: StateT
-    predecessors: Collection["FibreNode"] = field(converter=from_optional_predecessors)
+    predecessors: Sequence["FibreNode"] = field(converter=from_optional_predecessors)

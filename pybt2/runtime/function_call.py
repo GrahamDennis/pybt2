@@ -1,13 +1,13 @@
 import operator
 from abc import abstractmethod
-from typing import Callable, Collection, Generic, Iterator, Optional, Protocol, Type
+from typing import Callable, Generic, Iterator, MutableSequence, Optional, Protocol, Sequence, Type
 
 from attr import frozen, mutable
 
 from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError
 from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
 from pybt2.runtime.types import (
-    EMPTY_PREDECESSORS,
+    NO_PREDECESSORS,
     FibreNodeResult,
     Key,
     PropsT,
@@ -17,24 +17,28 @@ from pybt2.runtime.types import (
 )
 
 
+def auto_generated_child_key(child_idx: int) -> str:
+    return f"__auto_${child_idx}"
+
+
 @mutable
 class CallContext:
     _fibre: Fibre
     _fibre_node: FibreNode
-    _previous_predecessors: Collection[FibreNode]
+    _previous_predecessors: Sequence[FibreNode]
     _pointer: int = 0
-    _predecessors: Optional[list[FibreNode]] = None
+    _current_predecessors: Optional[MutableSequence[FibreNode]] = None
 
     def add_predecessor(self, fibre_node: FibreNode) -> None:
-        if self._predecessors is None:
-            self._predecessors = [fibre_node]
+        if self._current_predecessors is None:
+            self._current_predecessors = [fibre_node]
         else:
-            self._predecessors.append(fibre_node)
+            self._current_predecessors.append(fibre_node)
 
     def _validate_child_key_is_unique(self, key: Key) -> None:
-        if self._predecessors is None:
+        if self._current_predecessors is None:
             return
-        for predecessor in self._predecessors:
+        for predecessor in self._current_predecessors:
             if predecessor.parent is not self:
                 pass
             if predecessor.key == key:
@@ -44,7 +48,7 @@ class CallContext:
         if optional_key is not None:
             self._validate_child_key_is_unique(optional_key)
         self._pointer += 1
-        return optional_key if optional_key is not None else f"__auto_${self._pointer}"
+        return optional_key if optional_key is not None else auto_generated_child_key(self._pointer)
 
     def _get_previous_child_with_key(self, key: Key) -> Optional[FibreNode]:
         if self._previous_predecessors is None:
@@ -70,14 +74,15 @@ class CallContext:
         self, fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT], props: PropsT, key: Optional[Key] = None
     ) -> ResultT:
         child_fibre_node = self._get_child_fibre_node(fibre_node_type, key)
+        self.add_predecessor(child_fibre_node)
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
         return child_fibre_node_state.fibre_node_result.result
 
-    def get_predecessors(self) -> Optional[Collection[FibreNode]]:
-        if self._predecessors is None:
+    def get_predecessors(self) -> Optional[Sequence[FibreNode]]:
+        if self._current_predecessors is None:
             return None
         else:
-            return tuple(self._predecessors)
+            return tuple(self._current_predecessors)
 
 
 class RuntimeCallableFunction(Protocol[PropsT, ResultT]):
@@ -90,10 +95,10 @@ CallableProps = Callable[[CallContext], ResultT]
 
 
 @frozen
-class CallablePropsWrapper(RuntimeCallableFunction[CallableProps, ResultT]):
-    props_type: Type[CallableProps]
+class CallablePropsWrapper(RuntimeCallableFunction[CallableProps[ResultT], ResultT]):
+    props_type: Type[CallableProps[ResultT]]
 
-    def __call__(self, ctx: CallContext, props: CallableProps) -> ResultT:
+    def __call__(self, ctx: CallContext, props: CallableProps[ResultT]) -> ResultT:
         if not isinstance(props, self.props_type):
             raise PropsTypeConflictError(props=props, expected_type=self.props_type)
         return props(ctx)
@@ -115,10 +120,10 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
 
     @staticmethod
     def create_from_callable_type(
-        props_type: Type[CallableProps],
-        props_eq: Callable[[CallableProps, CallableProps], bool] = operator.eq,
+        props_type: Type[CallableProps[ResultT]],
+        props_eq: Callable[[CallableProps[ResultT], CallableProps[ResultT]], bool] = operator.eq,
         result_eq: Callable[[ResultT, ResultT], bool] = operator.eq,
-    ) -> "FunctionFibreNodeType[CallableProps, ResultT]":
+    ) -> "FunctionFibreNodeType[CallableProps[ResultT], ResultT]":
         return FunctionFibreNodeType(fn=CallablePropsWrapper(props_type), props_eq=props_eq, result_eq=result_eq)
 
     def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
@@ -130,12 +135,12 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
         fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT],
         props: PropsT,
         previous_result: Optional[FibreNodeResult[ResultT, None]],
-        _enqueued_updates: Iterator[None],
+        enqueued_updates: Iterator[None],
     ) -> FibreNodeResult[ResultT, None]:
         ctx = CallContext(
             fibre=fibre,
             fibre_node=fibre_node,
-            previous_predecessors=previous_result.predecessors if previous_result is not None else EMPTY_PREDECESSORS,
+            previous_predecessors=previous_result.predecessors if previous_result is not None else NO_PREDECESSORS,
         )
 
         # FIXME: This function could yield if we go that way
