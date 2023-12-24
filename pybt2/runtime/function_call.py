@@ -2,7 +2,7 @@ import operator
 from abc import ABCMeta, abstractmethod
 from typing import Callable, Generic, Iterator, MutableSequence, Optional, Sequence, Type, cast, overload
 
-from attr import frozen, mutable
+from attr import field, frozen, mutable
 
 from pybt2.runtime.exceptions import (
     ChildAlreadyExistsError,
@@ -130,9 +130,13 @@ class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
         return left == right
 
 
+def fully_qualified_type_name(a_type: type) -> str:
+    return f"{a_type.__module__}.{a_type.__qualname__}"
+
+
 @frozen
 class CallablePropsWrapper(RuntimeCallableFunction[RuntimeCallableProps[ResultT], ResultT]):
-    props_type: Type[RuntimeCallableProps[ResultT]]
+    props_type: Type[RuntimeCallableProps[ResultT]] = field(repr=fully_qualified_type_name)
 
     def __call__(self, ctx: CallContext, props: RuntimeCallableProps[ResultT]) -> ResultT:
         if not isinstance(props, self.props_type):
@@ -168,6 +172,9 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
             fn=cast(RuntimeCallableFunction[PropsT, ResultT], CallablePropsWrapper(runtime_callable_props_type)),
             result_eq=cast(Callable[[ResultT, ResultT], bool], props_type.are_results_eq),
         )
+
+    def display_name(self) -> str:
+        return f"{type(self).__qualname__}(fn={self._fn})"
 
     def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
         return self._props_eq(left, right)
