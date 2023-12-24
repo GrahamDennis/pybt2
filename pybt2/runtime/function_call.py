@@ -1,10 +1,15 @@
 import operator
-from abc import abstractmethod
-from typing import Callable, Generic, Iterator, MutableSequence, Optional, Protocol, Sequence, Type
+from abc import ABCMeta, abstractmethod
+from typing import Callable, Generic, Iterator, MutableSequence, Optional, Sequence, Type, cast, overload
 
 from attr import frozen, mutable
 
-from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError
+from pybt2.runtime.exceptions import (
+    ChildAlreadyExistsError,
+    ExpectedRuntimeCallablePropsType,
+    PropsTypeConflictError,
+    PropTypesNotIdenticalError,
+)
 from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
@@ -70,10 +75,33 @@ class CallContext:
         else:
             return FibreNode(key=child_key, fibre_node_type=fibre_node_type, parent=self._fibre_node)
 
+    @overload
+    def evaluate_child(self, props: "RuntimeCallableProps[ResultT]", *, key: Optional[Key] = None) -> ResultT:
+        ...
+
+    @overload
     def evaluate_child(
-        self, fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT], props: PropsT, key: Optional[Key] = None
+        self, props: PropsT, fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT], key: Optional[Key] = None
     ) -> ResultT:
-        child_fibre_node = self._get_child_fibre_node(fibre_node_type, key)
+        ...
+
+    def evaluate_child(
+        self,
+        props: PropsT,
+        fibre_node_type: Optional[FibreNodeType[PropsT, ResultT, StateT, UpdateT]] = None,
+        key: Optional[Key] = None,
+    ) -> ResultT:
+        resolved_fibre_node_type = (
+            fibre_node_type
+            if fibre_node_type is not None
+            else cast(
+                FibreNodeType[PropsT, ResultT, StateT, UpdateT],
+                FunctionFibreNodeType.create_from_callable_type(
+                    (props_type := type(props)), cast(Type[RuntimeCallableProps], props_type)
+                ),
+            )
+        )
+        child_fibre_node = self._get_child_fibre_node(resolved_fibre_node_type, key)
         self.add_predecessor(child_fibre_node)
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
         return child_fibre_node_state.fibre_node_result.result
@@ -85,20 +113,27 @@ class CallContext:
             return tuple(self._current_predecessors)
 
 
-class RuntimeCallableFunction(Protocol[PropsT, ResultT]):
+class RuntimeCallableFunction(Generic[PropsT, ResultT], metaclass=ABCMeta):
     @abstractmethod
     def __call__(self, ctx: CallContext, props: PropsT) -> ResultT:
         ...
 
 
-CallableProps = Callable[[CallContext], ResultT]
+class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
+    @abstractmethod
+    def __call__(self, ctx: CallContext) -> ResultT:
+        ...
+
+    @staticmethod
+    def are_results_eq(left: ResultT, right: ResultT) -> bool:
+        return left == right
 
 
 @frozen
-class CallablePropsWrapper(RuntimeCallableFunction[CallableProps[ResultT], ResultT]):
-    props_type: Type[CallableProps[ResultT]]
+class CallablePropsWrapper(RuntimeCallableFunction[RuntimeCallableProps[ResultT], ResultT]):
+    props_type: Type[RuntimeCallableProps[ResultT]]
 
-    def __call__(self, ctx: CallContext, props: CallableProps[ResultT]) -> ResultT:
+    def __call__(self, ctx: CallContext, props: RuntimeCallableProps[ResultT]) -> ResultT:
         if not isinstance(props, self.props_type):
             raise PropsTypeConflictError(props=props, expected_type=self.props_type)
         return props(ctx)
@@ -118,13 +153,20 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
     ) -> "FunctionFibreNodeType[PropsT, ResultT]":
         return FunctionFibreNodeType(fn=fn, props_eq=props_eq, result_eq=result_eq)
 
+    # This is an unfortunate API, but required to achieve the desired type checking
     @staticmethod
     def create_from_callable_type(
-        props_type: Type[CallableProps[ResultT]],
-        props_eq: Callable[[CallableProps[ResultT], CallableProps[ResultT]], bool] = operator.eq,
-        result_eq: Callable[[ResultT, ResultT], bool] = operator.eq,
-    ) -> "FunctionFibreNodeType[CallableProps[ResultT], ResultT]":
-        return FunctionFibreNodeType(fn=CallablePropsWrapper(props_type), props_eq=props_eq, result_eq=result_eq)
+        props_type: Type[PropsT],
+        runtime_callable_props_type: Type[RuntimeCallableProps[ResultT]],
+    ) -> "FunctionFibreNodeType[PropsT, ResultT]":
+        if props_type is not runtime_callable_props_type:
+            raise PropTypesNotIdenticalError(props_type, runtime_callable_props_type)
+        if not issubclass(props_type, RuntimeCallableProps):
+            raise ExpectedRuntimeCallablePropsType(props_type)
+        return FunctionFibreNodeType(
+            fn=cast(RuntimeCallableFunction[PropsT, ResultT], CallablePropsWrapper(runtime_callable_props_type)),
+            result_eq=cast(Callable[[ResultT, ResultT], bool], props_type.are_results_eq),
+        )
 
     def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
         return self._props_eq(left, right)

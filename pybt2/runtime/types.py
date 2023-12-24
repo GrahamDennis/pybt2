@@ -9,7 +9,7 @@ Key = str | int
 KeyPath = tuple[Key, ...]
 
 PropsT = TypeVar("PropsT", contravariant=True)
-ResultT = TypeVar("ResultT", covariant=True)
+ResultT = TypeVar("ResultT")
 StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
 

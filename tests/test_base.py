@@ -1,14 +1,14 @@
-from typing import Callable, Generic, TypeVar
+from typing import Callable, TypeVar
 
 from attr import frozen
 
 from pybt2.base import NAME
 from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeIdentity, FibreNodeState
 from pybt2.runtime.function_call import (
-    CallableProps,
     CallContext,
     FunctionFibreNodeType,
     RuntimeCallableFunction,
+    RuntimeCallableProps,
     auto_generated_child_key,
 )
 from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeResult, ResultT, StateT, UpdateT
@@ -23,7 +23,7 @@ class ReturnArgument(RuntimeCallableFunction[T, T]):
 
 
 @frozen
-class ReturnArgumentV2(Generic[T]):
+class ReturnArgumentV2(RuntimeCallableProps[T]):
     value: T
 
     def __call__(self, ctx: CallContext) -> T:
@@ -32,6 +32,9 @@ class ReturnArgumentV2(Generic[T]):
 
 def test_base():
     assert NAME == "pybt2"
+
+
+CallableProps = Callable[[CallContext], ResultT]
 
 
 def run_in_fibre(
@@ -43,20 +46,24 @@ def run_in_fibre(
     return inner
 
 
+@frozen
+class CallableWrapper(RuntimeCallableFunction[Callable[[CallContext], None], None]):
+    def __call__(self, ctx: CallContext, props: Callable[[CallContext], None]) -> None:
+        return props(ctx)
+
+
 def test_trivial():
     fibre_node = FibreNode(
         parent=None,
         key="root",
-        fibre_node_type=FunctionFibreNodeType.create_from_callable_type(
-            Callable,
-        ),
+        fibre_node_type=FunctionFibreNodeType(CallableWrapper()),
     )
     fibre = Fibre()
-    child_type = FunctionFibreNodeType.create_from_callable_type(ReturnArgumentV2)
+    child_type = FunctionFibreNodeType.create_from_callable_type(ReturnArgumentV2, ReturnArgumentV2)
 
     @run_in_fibre(fibre, fibre_node)
     def execute_1(ctx: CallContext):
-        assert ctx.evaluate_child(child_type, ReturnArgumentV2(1)) == 1
+        assert ctx.evaluate_child(ReturnArgumentV2(1)) == 1
 
     predecessors = fibre_node.get_fibre_node_state().fibre_node_result.predecessors
     assert len(predecessors) == 1
@@ -74,4 +81,4 @@ def test_trivial():
 
     @run_in_fibre(fibre, fibre_node)
     def execute_2(ctx: CallContext):
-        assert ctx.evaluate_child(child_type, ReturnArgumentV2(1)) == 1
+        assert ctx.evaluate_child(ReturnArgumentV2(1), fibre_node_type=child_type) == 1
