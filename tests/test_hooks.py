@@ -19,6 +19,10 @@ def consume(_: T) -> None:
     pass
 
 
+def increment(value: int) -> int:
+    return value + 1
+
+
 @pytest.mark.parametrize("known_keys", [["root", "use_state"]])
 def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
     setter: Setter[int] = consume
@@ -41,7 +45,8 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     test_instrumentation.assert_evaluations_and_reset([("root",)])
 
     # Call the setter
-    setter(3)
+    setter(increment)
+    setter(increment)
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
     use_state_fibre_node_state = use_state_fibre_node.get_fibre_node_state()

@@ -62,26 +62,6 @@ def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
         return *fibre_node.parent.key_path, fibre_node.key
 
 
-@frozen
-class FibreNodeIdentity(Generic[PropsT, ResultT, StateT, UpdateT]):
-    # Does parent belong here? Surely one of parent and key_path should be present
-    parent: Optional["FibreNode"]
-    key: Key
-    fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT]
-    key_path: KeyPath
-
-    @staticmethod
-    def create(
-        fibre_node: "FibreNode[PropsT, ResultT, StateT, UpdateT]",
-    ) -> "FibreNodeIdentity[PropsT, ResultT, StateT, UpdateT]":
-        return FibreNodeIdentity(
-            parent=fibre_node.parent,
-            key=fibre_node.key,
-            fibre_node_type=fibre_node.fibre_node_type,
-            key_path=fibre_node.key_path,
-        )
-
-
 @mutable(order=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # FIXME: should KeyPath be evaluated on demand or tuple(parent, key)

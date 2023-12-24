@@ -14,8 +14,8 @@ StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
 T = TypeVar("T")
 
-Setter = Callable[[T], None]
 Reducer = Union[T, Callable[[T], T]]
+Setter = Callable[[Reducer[T]], None]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
 
