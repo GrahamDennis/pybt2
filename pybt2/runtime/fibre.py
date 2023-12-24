@@ -164,6 +164,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         ):
             return previous_fibre_node_state
 
+        fibre.instrumentation.on_node_evaluation_start(self)
         next_fibre_node_result = self.fibre_node_type.run(
             fibre=fibre,
             fibre_node=self,
@@ -171,6 +172,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             previous_result=previous_fibre_node_result,
             enqueued_updates=execution_token.get_enqueued_updates(),
         )
+        fibre.instrumentation.on_node_evaluation_end(self)
 
         next_fibre_node_state = FibreNodeState(
             props=props,
@@ -202,10 +204,10 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         )
         current_predecessors = next_fibre_node_result.predecessors
         for previous_predecessor in previous_predecessors:
-            if previous_predecessor not in current_predecessors:
+            if previous_predecessor not in current_predecessors and previous_predecessor.parent is not self:
                 previous_predecessor.remove_successor(self)
         for current_predecessor in current_predecessors:
-            if current_predecessor not in previous_predecessors:
+            if current_predecessor not in previous_predecessors and current_predecessor.parent is not self:
                 current_predecessor.add_successor(self)
         if previous_fibre_node_result is not None and previous_fibre_node_result.predecessors is not None:
             next_children = {child for child in next_fibre_node_result.predecessors if child.parent is self}
@@ -227,7 +229,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
-    _instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
+    instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
 
     def run(
         self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
@@ -236,10 +238,8 @@ class Fibre:
 
         try:
             self._evaluation_stack.append(fibre_node)
-            self._instrumentation.on_node_evaluation_start(fibre_node)
             current_fibre_node_state = fibre_node.run(fibre=self, props=props)
         finally:
-            self._instrumentation.on_node_evaluation_end(fibre_node)
             self._evaluation_stack.pop()
 
         # if the result is out of date, then we need to update all successors

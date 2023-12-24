@@ -1,13 +1,13 @@
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
-from attr import frozen
+from attr import frozen, mutable
 
 if TYPE_CHECKING:
     from .fibre import FibreNode
 
 
-@frozen
+@mutable
 class FibreInstrumentation(metaclass=ABCMeta):
     @abstractmethod
     def on_node_evaluation_start(self, fibre_node: "FibreNode") -> None:

@@ -59,7 +59,7 @@ class CallContext:
         if self._previous_predecessors is None:
             return None
         for predecessor in self._previous_predecessors:
-            if predecessor.parent is not self:
+            if predecessor.parent is not self._fibre_node:
                 continue
             if predecessor.key == key:
                 return predecessor
@@ -119,6 +119,7 @@ class RuntimeCallableFunction(Generic[PropsT, ResultT], metaclass=ABCMeta):
         ...
 
 
+@frozen
 class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
     @abstractmethod
     def __call__(self, ctx: CallContext) -> ResultT:
