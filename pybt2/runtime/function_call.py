@@ -202,6 +202,3 @@ class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[
             result_version=next_result_version,
             predecessors=ctx.get_predecessors(),
         )
-
-    def dispose(self, result: FibreNodeResult[ResultT, None]) -> None:
-        pass

@@ -30,9 +30,8 @@ class FibreNodeType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta
     ) -> FibreNodeResult[ResultT, StateT]:
         ...
 
-    @abstractmethod
     def dispose(self, result: FibreNodeResult[ResultT, StateT]) -> None:
-        ...
+        pass
 
 
 @frozen
@@ -87,6 +86,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
     key: Key = field(on_setattr=setters.frozen)
     fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT] = field(on_setattr=setters.frozen)
+    # FIXME: should KeyPath be evaluated on demand or tuple(parent, key)
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
     )

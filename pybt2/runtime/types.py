@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Generic, Optional, Sequence, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, Optional, Sequence, TypeVar, Union
 
 from attr import field, frozen
 
@@ -12,6 +12,10 @@ PropsT = TypeVar("PropsT", contravariant=True)
 ResultT = TypeVar("ResultT")
 StateT = TypeVar("StateT")
 UpdateT = TypeVar("UpdateT")
+T = TypeVar("T")
+
+Setter = Callable[[T], None]
+Reducer = Union[T, Callable[[T], T]]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
 
