@@ -77,15 +77,17 @@ def test_setting_same_value_does_not_change_result_version(
 
     setter(1)
 
-    @run_in_fibre(fibre, root_fibre_node)
-    def execute_2(ctx: CallContext):
-        value, _ = use_state(ctx, 2, key="use_state")
-        assert value == 1
+    assert fibre.run(use_state_fibre_node, 2).fibre_node_result.result == (1, setter)
 
-    test_instrumentation.assert_evaluations_and_reset([("root",), ("root", "use_state")])
+    test_instrumentation.assert_evaluations_and_reset([("root", "use_state")])
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
     use_state_fibre_node_state_2 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_2 is not None
     assert use_state_fibre_node_state_2.fibre_node_result.result_version == 1
     assert use_state_fibre_node_state_2.fibre_node_result is use_state_fibre_node_state_1.fibre_node_result
+
+    # the root node should not be out of date
+    root_fibre_node_state = root_fibre_node.get_fibre_node_state()
+    assert root_fibre_node_state is not None
+    assert root_fibre_node.get_next_dependencies_version() == root_fibre_node_state.dependencies_version
