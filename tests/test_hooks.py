@@ -34,15 +34,22 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     # change the value to use_state but shouldn't trigger re-evaluation
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext):
-        nonlocal setter
-        value, setter = use_state(ctx, 2, key="use_state")
+        value, _ = use_state(ctx, 2, key="use_state")
         assert value == 1
 
     test_instrumentation.assert_evaluations_and_reset([("root",)])
 
+    # Call the setter
     setter(3)
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
     use_state_fibre_node_state = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state is not None
     assert use_state_fibre_node.get_next_dependencies_version() > use_state_fibre_node_state.dependencies_version
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_3(ctx: CallContext):
+        value, _ = use_state(ctx, 2, key="use_state")
+        assert value == 3
+
+    test_instrumentation.assert_evaluations_and_reset([("root",), ("root", "use_state")])
