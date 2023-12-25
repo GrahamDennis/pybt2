@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, Generic, Optional, Sequence, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, Sequence, TypeVar, Union
 
 from attr import field, frozen
 
@@ -16,6 +16,9 @@ T = TypeVar("T")
 
 Reducer = Union[T, Callable[[T], T]]
 Setter = Callable[[Reducer[T]], None]
+Task = Callable[[], None]
+OnDispose = Callable[[Task], None]
+Dependencies = Sequence[Any]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
 
