@@ -126,9 +126,19 @@ def use_resource(
     ctx: CallContext,
     resource_factory: UseResourceHookResourceFactory[T],
     dependencies: Dependencies,
-    key: Optional[Key],
+    key: Optional[Key] = None,
 ) -> T:
     return ctx.evaluate_child(
         UseResourceHook(resource_factory, dependencies),
         key=key,
     )
+
+
+def use_memo(ctx: CallContext, factory: Callable[[], T], dependencies: Dependencies, key: Optional[Key] = None) -> T:
+    return use_resource(ctx, lambda _: factory(), dependencies, key)
+
+
+def use_effect(
+    ctx: CallContext, effect: Callable[[OnDispose], None], dependencies: Dependencies, key: Optional[Key] = None
+) -> None:
+    return use_resource(ctx, effect, dependencies, key)
