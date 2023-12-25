@@ -11,7 +11,6 @@ from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeResult, Key, KeyPath, 
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
-@frozen
 class FibreNodeType(Generic[PropsT, ResultT, StateT, UpdateT], metaclass=ABCMeta):
     def display_name(self) -> str:
         return repr(self)

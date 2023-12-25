@@ -119,7 +119,6 @@ class RuntimeCallableFunction(Generic[PropsT, ResultT], metaclass=ABCMeta):
         ...
 
 
-@frozen
 class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
     @abstractmethod
     def __call__(self, ctx: CallContext) -> ResultT:
