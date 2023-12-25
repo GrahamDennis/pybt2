@@ -2,7 +2,7 @@ import itertools
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, Optional, Self, Sequence, TypeVar, Union
 
-from attr import frozen
+from attr import field, frozen
 
 if TYPE_CHECKING:
     from pybt2.runtime.fibre import Fibre, FibreNode
@@ -38,7 +38,10 @@ class FibreNodeExecutionToken(Generic[UpdateT]):
             return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
 
 
+@frozen
 class FibreNodeFunction(Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta):
+    key: Optional[Key] = field(default=None, kw_only=True)
+
     @abstractmethod
     def run(
         self,

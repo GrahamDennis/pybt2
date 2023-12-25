@@ -5,8 +5,12 @@ import pytest
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import Key
 
-from .instrumentation import CallRecordingInstrumentation
 from .utils import ExternalFunctionProps
+
+# This is necessary to get pretty assertion failure messages from the test instrumentation module
+pytest.register_assert_rewrite("tests.instrumentation")
+
+from .instrumentation import CallRecordingInstrumentation  # noqa: E402
 
 
 @pytest.fixture()

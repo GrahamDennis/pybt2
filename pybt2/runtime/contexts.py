@@ -8,11 +8,11 @@ from pybt2.runtime.types import NO_PREDECESSORS, ContextKey, FibreNodeFunction, 
 
 T = TypeVar("T")
 
-CONTEXT_CHILD_KEY = "ContextProvider.Child"
+DEFAULT_CONTEXT_CHILD_KEY = "__ContextProvider.Child"
 
 
 def _context_value_key(context_key: ContextKey[T]) -> str:
-    return f"ContextProvider.Value.{context_key.name}"
+    return f"__ContextProvider.Value.{context_key.name}"
 
 
 @frozen
@@ -54,11 +54,20 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, ResultT, None]:
         if previous_state is not None:
-            context_value_node, previous_child_node = previous_state.predecessors
+            context_value_node = cast(FibreNode[ContextValue[T], T, None, None], previous_state.predecessors[0])
+            previous_child_node = cast(
+                FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT],
+                previous_state.predecessors[1],
+            )
             fibre.run(context_value_node, ContextValue(self.value))
 
             previous_child_result = previous_child_node.get_fibre_node_state()
-            if previous_child_node.props_type is type(self.child) and previous_child_result is not None:
+
+            if (
+                previous_child_node.props_type is type(self.child)
+                and previous_child_result is not None
+                and previous_child_result.props.key == self.child.key
+            ):
                 child_result = fibre.run(previous_child_node, self.child)
                 return FibreNodeState(
                     props=self,
@@ -79,7 +88,7 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
         fibre.run(context_value_node, ContextValue(self.value))
         context_map = {self.context_key: context_value_node}
         child_fibre_node = FibreNode.create(
-            key=CONTEXT_CHILD_KEY,
+            key=self.child.key if self.child.key is not None else DEFAULT_CONTEXT_CHILD_KEY,
             parent=fibre_node,
             props_type=type(self.child),
             fibre_node_function_type=cast(Type[FibreNodeFunction[ResultT, StateT, UpdateT]], type(self.child)),
@@ -91,7 +100,10 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
             result=child_result.result,
             result_version=previous_state.result_version + 1 if previous_state is not None else 1,
             state=None,
-            predecessors=(child_fibre_node,),
+            predecessors=(
+                context_value_node,
+                child_fibre_node,
+            ),
         )
 
 

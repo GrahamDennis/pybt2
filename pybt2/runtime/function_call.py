@@ -72,7 +72,7 @@ class CallContext:
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
     ) -> ResultT:
-        child_fibre_node = self._get_child_fibre_node(type(props), key)
+        child_fibre_node = self._get_child_fibre_node(type(props), key if key is not None else props.key)
         self.add_predecessor(child_fibre_node)
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
