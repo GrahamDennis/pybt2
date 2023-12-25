@@ -4,7 +4,7 @@ import pytest
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.hooks import use_state
+from pybt2.runtime.hooks import UseStateHook, use_state
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import run_in_fibre
@@ -49,9 +49,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     setter(increment)
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
-    use_state_fibre_node_state = use_state_fibre_node.get_fibre_node_state()
-    assert use_state_fibre_node_state is not None
-    assert use_state_fibre_node.get_next_dependencies_version() > use_state_fibre_node_state.dependencies_version
+    assert use_state_fibre_node.is_out_of_date()
 
     @run_in_fibre(fibre, root_fibre_node)
     def execute_3(ctx: CallContext):
@@ -78,21 +76,19 @@ def test_setting_same_value_does_not_change_result_version(
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
     use_state_fibre_node_state_1 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_1 is not None
-    assert use_state_fibre_node_state_1.fibre_node_result.result_version == 1
+    assert use_state_fibre_node_state_1.result_version == 1
 
     setter(1)
 
-    assert fibre.run(use_state_fibre_node, 2).fibre_node_result.result == (1, setter)
+    assert fibre.run(use_state_fibre_node, UseStateHook(2)).result == (1, setter)
 
     test_instrumentation.assert_evaluations_and_reset([("root", "use_state")])
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
     use_state_fibre_node_state_2 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_2 is not None
-    assert use_state_fibre_node_state_2.fibre_node_result.result_version == 1
-    assert use_state_fibre_node_state_2.fibre_node_result is use_state_fibre_node_state_1.fibre_node_result
+    assert use_state_fibre_node_state_2.result_version == 1
+    assert use_state_fibre_node_state_2 is use_state_fibre_node_state_1
 
     # the root node should not be out of date
-    root_fibre_node_state = root_fibre_node.get_fibre_node_state()
-    assert root_fibre_node_state is not None
-    assert root_fibre_node.get_next_dependencies_version() == root_fibre_node_state.dependencies_version
+    assert not root_fibre_node.is_out_of_date()

@@ -1,21 +1,17 @@
-import operator
 from abc import ABCMeta, abstractmethod
-from typing import Callable, Generic, Iterator, MutableSequence, Optional, Sequence, Type, cast, overload
+from typing import Generic, Iterator, MutableSequence, Optional, Self, Sequence, Type, final
 
-from attr import field, frozen, mutable
+from attr import mutable
 
 from pybt2.runtime.exceptions import (
     ChildAlreadyExistsError,
-    ExpectedRuntimeCallablePropsType,
-    PropsTypeConflictError,
-    PropTypesNotIdenticalError,
 )
-from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
+from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
-    FibreNodeResult,
+    FibreNodeFunction,
+    FibreNodeState,
     Key,
-    PropsT,
     ResultT,
     StateT,
     UpdateT,
@@ -66,45 +62,24 @@ class CallContext:
         return None
 
     def _get_child_fibre_node(
-        self, fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT], key: Optional[Key] = None
-    ) -> FibreNode[PropsT, ResultT, StateT, UpdateT]:
+        self, props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]], key: Optional[Key] = None
+    ) -> FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]:
         child_key = self._next_child_key(key)
         previous_child_fibre_node: Optional[FibreNode] = self._get_previous_child_with_key(child_key)
-        if previous_child_fibre_node is not None and previous_child_fibre_node.fibre_node_type == fibre_node_type:
+        if previous_child_fibre_node is not None and previous_child_fibre_node.props_type == props_type:
             return previous_child_fibre_node
         else:
-            return FibreNode(key=child_key, fibre_node_type=fibre_node_type, parent=self._fibre_node)
-
-    @overload
-    def evaluate_child(self, props: "RuntimeCallableProps[ResultT]", *, key: Optional[Key] = None) -> ResultT:
-        ...
-
-    @overload
-    def evaluate_child(
-        self, props: PropsT, fibre_node_type: FibreNodeType[PropsT, ResultT, StateT, UpdateT], key: Optional[Key] = None
-    ) -> ResultT:
-        ...
+            return FibreNode(key=child_key, parent=self._fibre_node, props_type=props_type)
 
     def evaluate_child(
         self,
-        props: PropsT,
-        fibre_node_type: Optional[FibreNodeType[PropsT, ResultT, StateT, UpdateT]] = None,
+        props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
     ) -> ResultT:
-        resolved_fibre_node_type = (
-            fibre_node_type
-            if fibre_node_type is not None
-            else cast(
-                FibreNodeType[PropsT, ResultT, StateT, UpdateT],
-                FunctionFibreNodeType.create_from_callable_type(
-                    (props_type := type(props)), cast(Type[RuntimeCallableProps], props_type)
-                ),
-            )
-        )
-        child_fibre_node = self._get_child_fibre_node(resolved_fibre_node_type, key)
+        child_fibre_node = self._get_child_fibre_node(type(props), key)
         self.add_predecessor(child_fibre_node)
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
-        return child_fibre_node_state.fibre_node_result.result
+        return child_fibre_node_state.result
 
     def get_predecessors(self) -> Optional[Sequence[FibreNode]]:
         if self._current_predecessors is None:
@@ -113,13 +88,7 @@ class CallContext:
             return tuple(self._current_predecessors)
 
 
-class RuntimeCallableFunction(Generic[PropsT, ResultT], metaclass=ABCMeta):
-    @abstractmethod
-    def __call__(self, ctx: CallContext, props: PropsT) -> ResultT:
-        ...
-
-
-class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
+class RuntimeCallableProps(FibreNodeFunction[ResultT, None, None], Generic[ResultT], metaclass=ABCMeta):
     @abstractmethod
     def __call__(self, ctx: CallContext) -> ResultT:
         ...
@@ -128,83 +97,34 @@ class RuntimeCallableProps(Generic[ResultT], metaclass=ABCMeta):
     def are_results_eq(left: ResultT, right: ResultT) -> bool:
         return left == right
 
-
-def fully_qualified_type_name(a_type: type) -> str:
-    return f"{a_type.__module__}.{a_type.__qualname__}"
-
-
-@frozen
-class CallablePropsWrapper(RuntimeCallableFunction[RuntimeCallableProps[ResultT], ResultT]):
-    props_type: Type[RuntimeCallableProps[ResultT]] = field(repr=fully_qualified_type_name)
-
-    def __call__(self, ctx: CallContext, props: RuntimeCallableProps[ResultT]) -> ResultT:
-        if not isinstance(props, self.props_type):
-            raise PropsTypeConflictError(props=props, expected_type=self.props_type)
-        return props(ctx)
-
-
-@frozen
-class FunctionFibreNodeType(FibreNodeType[PropsT, ResultT, None, None], Generic[PropsT, ResultT]):
-    _fn: RuntimeCallableFunction[PropsT, ResultT]
-    _props_eq: Callable[[PropsT, PropsT], bool] = operator.eq
-    _result_eq: Callable[[ResultT, ResultT], bool] = operator.eq
-
-    @staticmethod
-    def create_from_function(
-        fn: RuntimeCallableFunction[PropsT, ResultT],
-        props_eq: Callable[[PropsT, PropsT], bool] = operator.eq,
-        result_eq: Callable[[ResultT, ResultT], bool] = operator.eq,
-    ) -> "FunctionFibreNodeType[PropsT, ResultT]":
-        return FunctionFibreNodeType(fn=fn, props_eq=props_eq, result_eq=result_eq)
-
-    # This is an unfortunate API, but required to achieve the desired type checking
-    @staticmethod
-    def create_from_callable_type(
-        props_type: Type[PropsT],
-        runtime_callable_props_type: Type[RuntimeCallableProps[ResultT]],
-    ) -> "FunctionFibreNodeType[PropsT, ResultT]":
-        if props_type is not runtime_callable_props_type:
-            raise PropTypesNotIdenticalError(props_type, runtime_callable_props_type)
-        if not issubclass(props_type, RuntimeCallableProps):
-            raise ExpectedRuntimeCallablePropsType(props_type)
-        return FunctionFibreNodeType(
-            fn=cast(RuntimeCallableFunction[PropsT, ResultT], CallablePropsWrapper(runtime_callable_props_type)),
-            result_eq=cast(Callable[[ResultT, ResultT], bool], props_type.are_results_eq),
-        )
-
-    def display_name(self) -> str:
-        return f"{type(self).__qualname__}(fn={self._fn})"
-
-    def are_props_equal(self, left: PropsT, right: PropsT) -> bool:
-        return self._props_eq(left, right)
-
+    @final
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT],
-        props: PropsT,
-        previous_result: Optional[FibreNodeResult[ResultT, None]],
+        fibre: "Fibre",
+        fibre_node: "FibreNode[Self, ResultT, None, None]",
+        previous_state: Optional["FibreNodeState[Self, ResultT, None]"],
         enqueued_updates: Iterator[None],
-    ) -> FibreNodeResult[ResultT, None]:
+    ) -> "FibreNodeState[Self, ResultT, None]":
         ctx = CallContext(
             fibre=fibre,
             fibre_node=fibre_node,
-            previous_predecessors=previous_result.predecessors if previous_result is not None else NO_PREDECESSORS,
+            previous_predecessors=previous_state.predecessors if previous_state is not None else NO_PREDECESSORS,
         )
 
         # FIXME: This function could yield if we go that way
-        result = self._fn(ctx, props)
+        result = self(ctx)
         next_result_version: int
-        if previous_result is None:
+        if previous_state is None:
             next_result_version = 1
-        elif self._result_eq(result, previous_result.result):
-            next_result_version = previous_result.result_version
+        elif self.are_results_eq(result, previous_state.result):
+            next_result_version = previous_state.result_version
         else:
-            next_result_version = previous_result.result_version + 1
+            next_result_version = previous_state.result_version + 1
 
-        return FibreNodeResult(
+        return FibreNodeState(
+            props=self,
             result=result,
-            state=None,
             result_version=next_result_version,
+            state=None,
             predecessors=ctx.get_predecessors(),
         )

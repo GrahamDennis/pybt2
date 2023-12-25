@@ -4,7 +4,7 @@ from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import (
     CallContext,
 )
-from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeResult
+from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeState
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
@@ -19,10 +19,8 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
         assert ctx.evaluate_child(ReturnArgument(1), key="child") == 1
 
     first_child = root_fibre_node.get_fibre_node(("root", "child"))
-    assert (first_child_fibre_node_state := first_child.get_fibre_node_state()) is not None
-    assert first_child_fibre_node_state.dependencies_version == 1
-    assert first_child_fibre_node_state.fibre_node_result == FibreNodeResult(
-        result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
+    assert first_child.get_fibre_node_state() == FibreNodeState(
+        props=ReturnArgument(1), result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
     )
     test_instrumentation.assert_evaluations_and_reset([("root",), ("root", "child")])
 
@@ -67,5 +65,4 @@ def test_evaluating_modified_child_causes_parent_to_be_marked_out_of_date(
 
     test_instrumentation.assert_evaluations_and_reset([("root", "child")])
 
-    assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
-    assert root_fibre_node.get_next_dependencies_version() > root_fibre_node_state.dependencies_version
+    assert root_fibre_node.is_out_of_date()

@@ -1,13 +1,14 @@
-from typing import Any, Callable, Generic, Iterator, Optional, Tuple, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, Generic, Iterator, Optional, Self, Tuple, TypeVar, cast
 
 from attr import field, frozen
+from typing_extensions import override
 
-from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeType
 from pybt2.runtime.function_call import CallContext
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
     Dependencies,
-    FibreNodeResult,
+    FibreNodeFunction,
+    FibreNodeState,
     Key,
     OnDispose,
     Reducer,
@@ -15,100 +16,91 @@ from pybt2.runtime.types import (
     Task,
 )
 
+if TYPE_CHECKING:
+    from pybt2.runtime.fibre import Fibre, FibreNode
+
 T = TypeVar("T")
+
+UseStateResult = Tuple[T, Setter[T]]
 
 
 @frozen
-class UseStateHook(FibreNodeType[T, Tuple[T, Setter[T]], None, Reducer[T]], Generic[T]):
-    def are_props_equal(self, left: T, right: T) -> bool:
-        # Props changing doesn't make this node out of date
-        return True
+class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Generic[T]):
+    value: T = field(eq=False)
 
+    @override
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[T, Tuple[T, Setter[T]], None, Reducer[T]],
-        props: T,
-        previous_result: Optional[FibreNodeResult[Tuple[T, Setter[T]], None]],
+        fibre: "Fibre",
+        fibre_node: "FibreNode[Self, UseStateResult[T], None, Reducer[T]]",
+        previous_state: Optional["FibreNodeState[Self, UseStateResult[T], None]"],
         enqueued_updates: Iterator[Reducer[T]],
-    ) -> FibreNodeResult[Tuple[T, Setter[T]], None]:
+    ) -> "FibreNodeState[Self, UseStateResult[T], None]":
         value: T
         setter: Setter[T]
+        result_version: int
 
-        if previous_result is not None:
-            previous_value, previous_setter = previous_result.result
+        if previous_state is not None:
+            previous_value, previous_setter = previous_state.result
             value = previous_value
             setter = previous_setter
             for update in enqueued_updates:
                 value = cast(Callable[[T], T], update)(value) if callable(update) else cast(T, update)
             if value == previous_value:
-                return previous_result
+                return previous_state
+            result_version = previous_state.result_version + 1
         else:
-            value = props
+            value = self.value
             setter = fibre_node.enqueue_update
-        return FibreNodeResult(
+            result_version = 1
+        return FibreNodeState(
+            props=self,
             result=(value, setter),
-            result_version=previous_result.result_version + 1 if previous_result is not None else 1,
+            result_version=result_version,
             state=None,
             predecessors=NO_PREDECESSORS,
         )
 
 
-_USE_STATE_HOOK_INSTANCE = UseStateHook[Any]()
-
-
 def use_state(ctx: CallContext, value: T, key: Optional[Key] = None) -> Tuple[T, Setter[T]]:
-    return ctx.evaluate_child(value, cast(UseStateHook[T], _USE_STATE_HOOK_INSTANCE), key=key)
+    return ctx.evaluate_child(UseStateHook(value), key=key)
 
 
 UseResourceHookResourceFactory = Callable[[OnDispose], T]
+UseResourceHookState = Optional[Task]
 
 
 @frozen
-class UseResourceHookProps(Generic[T]):
+class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[T]):
     resource_factory: UseResourceHookResourceFactory[T] = field(eq=False)
     dependencies: Dependencies
 
-
-@frozen
-class UseResourceHookState:
-    # If the previous props were supplied, we wouldn't need this
-    dependencies: Dependencies
-    dispose: Optional[Task]
-
-
-@frozen
-class UseResourceHook(FibreNodeType[UseResourceHookProps[T], T, UseResourceHookState, None], Generic[T]):
-    def are_props_equal(self, left: UseResourceHookProps[T], right: UseResourceHookProps[T]) -> bool:
-        return left == right
-
+    @override
     def run(
         self,
         fibre: "Fibre",
-        fibre_node: FibreNode[UseResourceHookProps[T], T, UseResourceHookState, None],
-        props: UseResourceHookProps[T],
-        previous_result: Optional[FibreNodeResult[T, UseResourceHookState]],
+        fibre_node: "FibreNode[Self, T, UseResourceHookState, None]",
+        previous_state: Optional["FibreNodeState[Self, T, UseResourceHookState]"],
         enqueued_updates: Iterator[None],
-    ) -> FibreNodeResult[T, UseResourceHookState]:
-        if previous_result is not None and previous_result.state.dependencies == props.dependencies:
-            return previous_result
-        if previous_result is not None and previous_result.state.dispose is not None:
-            previous_result.state.dispose()
+    ) -> "FibreNodeState[Self, T, UseResourceHookState]":
+        if previous_state is not None and previous_state.props.dependencies == self.dependencies:
+            return previous_state
+        if previous_state is not None and previous_state.state is not None:
+            previous_state.state()
 
-        result, dispose = self.construct_resource(props.resource_factory)
+        result, dispose = self.construct_resource(self.resource_factory)
         result_version: int
-        if previous_result is None:
+        if previous_state is None:
             result_version = 1
         else:
-            previous_result_version = previous_result.result_version
-            result_version = (
-                previous_result_version if result == previous_result.result else previous_result_version + 1
-            )
+            previous_result_version = previous_state.result_version
+            result_version = previous_result_version if result == previous_state.result else previous_result_version + 1
 
-        return FibreNodeResult(
+        return FibreNodeState(
+            props=self,
             result=result,
             result_version=result_version,
-            state=UseResourceHookState(dependencies=props.dependencies, dispose=dispose),
+            state=dispose,
             predecessors=None,
         )
 
@@ -130,9 +122,6 @@ class UseResourceHook(FibreNodeType[UseResourceHookProps[T], T, UseResourceHookS
         return value, cleanup
 
 
-_USE_RESOURCE_HOOK_INSTANCE = UseResourceHook[Any]()
-
-
 def use_resource(
     ctx: CallContext,
     resource_factory: UseResourceHookResourceFactory[T],
@@ -140,7 +129,6 @@ def use_resource(
     key: Optional[Key],
 ) -> T:
     return ctx.evaluate_child(
-        UseResourceHookProps(resource_factory, dependencies),
-        cast(UseResourceHook[T], _USE_RESOURCE_HOOK_INSTANCE),
+        UseResourceHook(resource_factory, dependencies),
         key=key,
     )
