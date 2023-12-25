@@ -92,3 +92,24 @@ def test_setting_same_value_does_not_change_result_version(
 
     # the root node should not be out of date
     assert not root_fibre_node.is_out_of_date()
+
+
+@pytest.mark.parametrize("known_keys", [["use_state1", "use_state2"]])
+def test_multiple_children_and_can_reorder_preserving_state(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        value1, _ = use_state(ctx, 1, key="use_state1")
+        value2, _ = use_state(ctx, 2, key="use_state2")
+        assert value1 == 1
+        assert value2 == 2
+
+    test_instrumentation.assert_evaluations_and_reset([("use_state1",), ("use_state2",)])
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        value2, _ = use_state(ctx, 200, key="use_state2")
+        value1, _ = use_state(ctx, 100, key="use_state1")
+        assert value1 == 1
+        assert value2 == 2
