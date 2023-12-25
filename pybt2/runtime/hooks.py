@@ -1,7 +1,7 @@
-from typing import Callable, Generic, Iterator, Optional, Self, Tuple, TypeVar, cast
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, cast
 
 from attr import field, frozen
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext

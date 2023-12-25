@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
-from typing import Generic, Iterator, MutableSequence, Optional, Self, Sequence, Type, TypeVar, final
+from typing import Generic, Iterator, MutableSequence, Optional, Sequence, Type, TypeVar, final
 
 from attr import Factory, mutable
+from typing_extensions import Self
 
 from pybt2.runtime.exceptions import (
     ChildAlreadyExistsError,

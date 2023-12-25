@@ -1,8 +1,9 @@
 import itertools
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, Optional, Self, Sequence, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, Optional, Sequence, TypeVar, Union
 
 from attr import field, frozen
+from typing_extensions import Self
 
 if TYPE_CHECKING:
     from pybt2.runtime.fibre import Fibre, FibreNode
