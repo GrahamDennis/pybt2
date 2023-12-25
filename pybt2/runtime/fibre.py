@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Generic, Iterator, Optional, Set, Type, cast
+from typing import Any, ChainMap, Generic, Iterator, Optional, Set, Type, cast
 
 from attr import Factory, field, mutable, setters
 
@@ -7,6 +7,7 @@ from pybt2.runtime.exceptions import PropsTypeConflictError, PropTypesNotIdentic
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
+    ContextKey,
     FibreNodeExecutionToken,
     FibreNodeFunction,
     FibreNodeState,
@@ -28,14 +29,24 @@ def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
         return *fibre_node.parent.key_path, fibre_node.key
 
 
-@mutable(order=False)
+def _get_contexts(fibre_node: Optional["FibreNode"]) -> ChainMap[ContextKey, "FibreNode"]:
+    return fibre_node.contexts if fibre_node is not None else ChainMap[ContextKey, "FibreNode"]()
+
+
+def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[ContextKey, "FibreNode"]:
+    return _get_contexts(fibre_node.parent)
+
+
+@mutable(eq=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
-    # FIXME: should KeyPath be evaluated on demand or tuple(parent, key)
     key: Key = field(on_setattr=setters.frozen)
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
     props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]] = field(on_setattr=setters.frozen)
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
+    )
+    contexts: ChainMap[ContextKey, "FibreNode"] = field(
+        default=Factory(_get_parent_contexts, takes_self=True), on_setattr=setters.frozen
     )
 
     _fibre_node_state: Optional[FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]] = None
@@ -51,10 +62,16 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         parent: Optional["FibreNode"],
         props_type: Type[PropsT],
         fibre_node_function_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
+        contexts: Optional[ChainMap[ContextKey, "FibreNode"]] = None,
     ) -> "FibreNode[PropsT, ResultT, StateT, UpdateT]":
         if props_type is not fibre_node_function_type:
             raise PropTypesNotIdenticalError(props_type, fibre_node_function_type)
-        return FibreNode(key=key, parent=parent, props_type=fibre_node_function_type)
+        return FibreNode(
+            key=key,
+            parent=parent,
+            props_type=fibre_node_function_type,
+            contexts=contexts if contexts is not None else _get_contexts(parent),
+        )
 
     def add_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:
@@ -106,7 +123,6 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         return other is self
 
     def run(self, fibre: "Fibre", props: PropsT, force: bool = False) -> FibreNodeState[PropsT, ResultT, StateT]:
-        # FIXME: Can we avoid this problem by baking in the props type as part of the key path?
         if not isinstance(props, self.props_type):
             raise PropsTypeConflictError(props=props, expected_type=self.props_type)
         previous_fibre_node_state = self._fibre_node_state

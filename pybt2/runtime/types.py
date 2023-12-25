@@ -2,7 +2,7 @@ import itertools
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, Optional, Self, Sequence, TypeVar, Union
 
-from attr import field, frozen
+from attr import frozen
 
 if TYPE_CHECKING:
     from pybt2.runtime.fibre import Fibre, FibreNode
@@ -23,13 +23,6 @@ Dependencies = Sequence[Any]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
-
-
-def from_optional_predecessors(predecessors: Optional[Sequence["FibreNode"]]) -> Sequence["FibreNode"]:
-    if predecessors is None:
-        return NO_PREDECESSORS
-    else:
-        return predecessors
 
 
 @frozen
@@ -70,4 +63,15 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     result: ResultT
     result_version: int
     state: StateT
-    predecessors: Sequence["FibreNode"] = field(converter=from_optional_predecessors)
+    predecessors: Sequence["FibreNode"]
+
+
+@frozen(eq=False)
+class ContextKey(Generic[T]):
+    name: str
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other
+
+    def __hash__(self) -> int:
+        return id(self)

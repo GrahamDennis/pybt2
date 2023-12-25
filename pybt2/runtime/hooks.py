@@ -103,7 +103,7 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
             result=result,
             result_version=result_version,
             state=dispose,
-            predecessors=None,
+            predecessors=NO_PREDECESSORS,
         )
 
     def construct_resource(self, resource_factory: UseResourceHookResourceFactory[T]) -> tuple[T, Optional[Task]]:

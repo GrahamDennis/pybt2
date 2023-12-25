@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
-from typing import Generic, Iterator, MutableSequence, Optional, Self, Sequence, Type, final
+from typing import Generic, Iterator, MutableSequence, Optional, Self, Sequence, Type, TypeVar, final
 
-from attr import mutable
+from attr import Factory, mutable
 
 from pybt2.runtime.exceptions import (
     ChildAlreadyExistsError,
@@ -9,6 +9,7 @@ from pybt2.runtime.exceptions import (
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
+    ContextKey,
     FibreNodeFunction,
     FibreNodeState,
     Key,
@@ -16,6 +17,8 @@ from pybt2.runtime.types import (
     StateT,
     UpdateT,
 )
+
+T = TypeVar("T")
 
 
 def auto_generated_child_key(child_idx: int) -> str:
@@ -28,17 +31,12 @@ class CallContext:
     _fibre_node: FibreNode
     _previous_predecessors: Sequence[FibreNode]
     _pointer: int = 0
-    _current_predecessors: Optional[MutableSequence[FibreNode]] = None
+    _current_predecessors: MutableSequence[FibreNode] = Factory(list)
 
     def add_predecessor(self, fibre_node: FibreNode) -> None:
-        if self._current_predecessors is None:
-            self._current_predecessors = [fibre_node]
-        else:
-            self._current_predecessors.append(fibre_node)
+        self._current_predecessors.append(fibre_node)
 
     def _validate_child_key_is_unique(self, key: Key) -> None:
-        if self._current_predecessors is None:
-            return
         for predecessor in self._current_predecessors:
             if predecessor.parent is not self:
                 pass
@@ -52,8 +50,6 @@ class CallContext:
         return optional_key if optional_key is not None else auto_generated_child_key(self._pointer)
 
     def _get_previous_child_with_key(self, key: Key) -> Optional[FibreNode]:
-        if self._previous_predecessors is None:
-            return None
         for predecessor in self._previous_predecessors:
             if predecessor.parent is not self._fibre_node:
                 continue
@@ -66,7 +62,7 @@ class CallContext:
     ) -> FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]:
         child_key = self._next_child_key(key)
         previous_child_fibre_node: Optional[FibreNode] = self._get_previous_child_with_key(child_key)
-        if previous_child_fibre_node is not None and previous_child_fibre_node.props_type == props_type:
+        if previous_child_fibre_node is not None and previous_child_fibre_node.props_type is props_type:
             return previous_child_fibre_node
         else:
             return FibreNode(key=child_key, parent=self._fibre_node, props_type=props_type)
@@ -81,11 +77,14 @@ class CallContext:
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
 
-    def get_predecessors(self) -> Optional[Sequence[FibreNode]]:
+    def get_predecessors(self) -> Sequence[FibreNode]:
         if self._current_predecessors is None:
-            return None
+            return NO_PREDECESSORS
         else:
             return tuple(self._current_predecessors)
+
+    def get_context_value_fibre_node(self, context_key: ContextKey[T]) -> FibreNode:
+        return self._fibre_node.contexts[context_key]
 
 
 class RuntimeCallableProps(FibreNodeFunction[ResultT, None, None], Generic[ResultT], metaclass=ABCMeta):
