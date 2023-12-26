@@ -52,7 +52,7 @@ def test_failure(scheduler: Scheduler):
 
 
 def test_iterate(scheduler: Scheduler):
-    def iterator() -> Generator:
+    def iterator() -> Generator[int, None, int]:
         yield 1
         yield 2
         return 3
