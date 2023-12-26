@@ -10,6 +10,11 @@ from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
 
 
+@pytest.fixture()
+def fibre(incremental_fibre: Fibre) -> Fibre:
+    return incremental_fibre
+
+
 @pytest.mark.known_keys("child")
 def test_incremental_does_not_evaluate_child_if_unchanged(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation

@@ -26,14 +26,19 @@ def test_instrumentation(known_keys: Collection[Key]) -> CallRecordingInstrument
     return CallRecordingInstrumentation(known_keys=known_keys)
 
 
-@pytest.fixture()
-def fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
-    return Fibre(instrumentation=test_instrumentation)
+@pytest.fixture(params=[False, True], ids=["incremental=False", "incremental=True"])
+def fibre(test_instrumentation: CallRecordingInstrumentation, request: pytest.FixtureRequest) -> Fibre:
+    return Fibre(instrumentation=test_instrumentation, incremental=request.param)
 
 
 @pytest.fixture()
 def non_incremental_fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
-    return Fibre(instrumentation=test_instrumentation, disable_incremental=True)
+    return Fibre(instrumentation=test_instrumentation, incremental=False)
+
+
+@pytest.fixture()
+def incremental_fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
+    return Fibre(instrumentation=test_instrumentation, incremental=True)
 
 
 @pytest.fixture()

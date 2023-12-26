@@ -122,7 +122,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     def __eq__(self, other: Any) -> bool:
         return other is self
 
-    def run(self, fibre: "Fibre", props: PropsT, force: bool = False) -> FibreNodeState[PropsT, ResultT, StateT]:
+    def run(self, fibre: "Fibre", props: PropsT, incremental: bool = True) -> FibreNodeState[PropsT, ResultT, StateT]:
         if not isinstance(props, self.props_type):
             raise PropsTypeConflictError(props=props, expected_type=self.props_type)
         previous_fibre_node_state = self._fibre_node_state
@@ -131,7 +131,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
         execution_token = self._create_execution_token()
         if (
-            not force
+            incremental
             and previous_fibre_node_state is not None
             and execution_token.dependencies_version == self._previous_dependencies_version
         ):
@@ -213,16 +213,16 @@ class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
     instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
-    _disable_incremental: bool = False
+    _incremental: bool = True
 
     def run(
-        self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT, force: bool = False
+        self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
         previous_fibre_node_state = fibre_node.get_fibre_node_state()
 
         try:
             self._evaluation_stack.append(fibre_node)
-            current_fibre_node_state = fibre_node.run(fibre=self, props=props, force=force or self._disable_incremental)
+            current_fibre_node_state = fibre_node.run(fibre=self, props=props, incremental=self._incremental)
         finally:
             self._evaluation_stack.pop()
 

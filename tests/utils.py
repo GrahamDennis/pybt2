@@ -21,10 +21,9 @@ def run_in_fibre(
     fibre: Fibre,
     fibre_node: FibreNode[ExternalFunctionProps[ResultT], ResultT, StateT, UpdateT],
     drain_work_queue: bool = False,
-    force: bool = False,
 ) -> Callable[[ExternalFunction[ResultT]], FibreNodeState[ExternalFunctionProps[ResultT], ResultT, StateT]]:
     def inner(fn: ExternalFunction[ResultT]) -> FibreNodeState[ExternalFunctionProps[ResultT], ResultT, StateT]:
-        result = fibre.run(fibre_node, ExternalFunctionProps(fn), force=force)
+        result = fibre.run(fibre_node, ExternalFunctionProps(fn))
         if drain_work_queue:
             fibre.drain_work_queue()
         return result

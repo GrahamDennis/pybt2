@@ -23,7 +23,10 @@ def increment(value: int) -> int:
 
 
 @pytest.mark.known_keys("use_state")
-def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
+def test_use_state(
+    incremental_fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    fibre = incremental_fibre
     setter: Setter[int] = consume
 
     @run_in_fibre(fibre, root_fibre_node)
