@@ -180,7 +180,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         for next_predecessor in next_predecessors:
             if next_predecessor not in previous_predecessors and next_predecessor.parent is not self:
                 next_predecessor.add_successor(self)
-        if previous_fibre_node_state is not None and previous_fibre_node_state.predecessors is not None:
+        if previous_fibre_node_state is not None and previous_fibre_node_state.predecessors:
             next_children = {child for child in next_fibre_node_state.predecessors if child.parent is self}
             for previous_child in previous_fibre_node_state.predecessors:
                 if previous_child.parent is not self or previous_child in next_children:
@@ -189,10 +189,9 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
-            if (predecessors := fibre_node_state.predecessors) is not None:
-                for predecessor in predecessors:
-                    if predecessor.parent is self:
-                        predecessor.dispose()
+            for predecessor in fibre_node_state.predecessors:
+                if predecessor.parent is self:
+                    predecessor.dispose()
             cast(FibreNodeFunction[ResultT, StateT, UpdateT], self.props_type).dispose(
                 cast(FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT], fibre_node_state)
             )
@@ -214,15 +213,16 @@ class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
     instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
+    _disable_incremental: bool = False
 
     def run(
-        self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
+        self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT, force: bool = False
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
         previous_fibre_node_state = fibre_node.get_fibre_node_state()
 
         try:
             self._evaluation_stack.append(fibre_node)
-            current_fibre_node_state = fibre_node.run(fibre=self, props=props)
+            current_fibre_node_state = fibre_node.run(fibre=self, props=props, force=force or self._disable_incremental)
         finally:
             self._evaluation_stack.pop()
 
@@ -243,4 +243,11 @@ class Fibre:
         return current_fibre_node_state
 
     def schedule(self, fibre_node: FibreNode) -> None:
+        assert fibre_node.get_fibre_node_state() is not None
         self._work_queue.append(fibre_node)
+
+    def drain_work_queue(self) -> None:
+        while self._work_queue:
+            fibre_node = self._work_queue.popleft()
+            assert (fibre_node_state := fibre_node.get_fibre_node_state()) is not None
+            self.run(fibre_node, fibre_node_state.props)

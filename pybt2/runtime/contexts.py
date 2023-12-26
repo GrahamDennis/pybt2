@@ -1,11 +1,11 @@
-from typing import Generic, Iterator, Optional, Type, TypeVar, cast
+from typing import Any, Generic, Iterator, Optional, Type, TypeVar, cast
 
 from attr import frozen
 from typing_extensions import Self
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.types import NO_PREDECESSORS, ContextKey, FibreNodeFunction, FibreNodeState, ResultT, StateT, UpdateT
+from pybt2.runtime.types import NO_PREDECESSORS, ContextKey, FibreNodeFunction, FibreNodeState, ResultT
 
 T = TypeVar("T")
 
@@ -42,10 +42,10 @@ class ContextValue(FibreNodeFunction[T, None, None], Generic[T]):
 
 
 @frozen
-class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT, StateT, UpdateT]):
+class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT]):
     context_key: ContextKey[T]
     value: T
-    child: FibreNodeFunction[ResultT, StateT, UpdateT]
+    child: FibreNodeFunction[ResultT, Any, Any]
 
     def run(
         self,
@@ -57,7 +57,7 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
         if previous_state is not None:
             context_value_node = cast(FibreNode[ContextValue[T], T, None, None], previous_state.predecessors[0])
             previous_child_node = cast(
-                FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT],
+                FibreNode[FibreNodeFunction[ResultT, Any, Any], ResultT, Any, Any],
                 previous_state.predecessors[1],
             )
             fibre.run(context_value_node, ContextValue(self.value))
@@ -92,7 +92,7 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
             key=self.child.key if self.child.key is not None else DEFAULT_CONTEXT_CHILD_KEY,
             parent=fibre_node,
             props_type=type(self.child),
-            fibre_node_function_type=cast(Type[FibreNodeFunction[ResultT, StateT, UpdateT]], type(self.child)),
+            fibre_node_function_type=cast(Type[FibreNodeFunction[ResultT, Any, Any]], type(self.child)),
             contexts=fibre_node.contexts.new_child(context_map),
         )
         child_result = fibre.run(child_fibre_node, self.child)

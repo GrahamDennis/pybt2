@@ -123,6 +123,11 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
 
         return value, cleanup
 
+    @classmethod
+    def dispose(cls, state: FibreNodeState[Self, T, UseResourceHookState]) -> None:
+        if state.state is not None:
+            state.state()
+
 
 def use_resource(
     ctx: CallContext,

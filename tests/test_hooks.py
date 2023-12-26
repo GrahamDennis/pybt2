@@ -1,16 +1,15 @@
-from typing import TYPE_CHECKING, TypeVar
+from functools import partial
+from typing import TypeVar
 
 import pytest
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.hooks import UseStateHook, use_state
+from pybt2.runtime.hooks import UseStateHook, use_resource, use_state
+from pybt2.runtime.types import OnDispose, Setter
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import run_in_fibre
-
-if TYPE_CHECKING:
-    from pybt2.runtime.types import Setter
 
 T = TypeVar("T")
 
@@ -23,7 +22,7 @@ def increment(value: int) -> int:
     return value + 1
 
 
-@pytest.mark.parametrize("known_keys", [["use_state"]])
+@pytest.mark.known_keys("use_state")
 def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
     setter: Setter[int] = consume
 
@@ -60,7 +59,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     test_instrumentation.assert_evaluations_and_reset([("use_state",)])
 
 
-@pytest.mark.parametrize("known_keys", [["use_state"]])
+@pytest.mark.known_keys("use_state")
 def test_setting_same_value_does_not_change_result_version(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -94,7 +93,7 @@ def test_setting_same_value_does_not_change_result_version(
     assert not root_fibre_node.is_out_of_date()
 
 
-@pytest.mark.parametrize("known_keys", [["use_state1", "use_state2"]])
+@pytest.mark.known_keys("use_state1", "use_state2")
 def test_multiple_children_and_can_reorder_preserving_state(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -113,3 +112,58 @@ def test_multiple_children_and_can_reorder_preserving_state(
         value1, _ = use_state(ctx, 100, key="use_state1")
         assert value1 == 1
         assert value2 == 2
+
+
+class TestUseResource:
+    dispose_called: bool = False
+
+    def dispose(self) -> None:
+        self.dispose_called = True
+
+    def construct_resource_factory(self, value: int, on_dispose: OnDispose) -> int:
+        on_dispose(self.dispose)
+        return value
+
+    def test_use_resource_does_not_dispose_on_factory_change(
+        self, non_incremental_fibre: Fibre, root_fibre_node: FibreNode
+    ):
+        fibre = non_incremental_fibre
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext):
+            value = use_resource(ctx, partial(self.construct_resource_factory, 1), dependencies=[1])
+            assert value == 1
+            assert self.dispose_called is False
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext):
+            value = use_resource(ctx, partial(self.construct_resource_factory, 2), dependencies=[1])
+            assert value == 1
+            assert self.dispose_called is False
+
+    def test_use_resource_calls_dispose_on_dependencies_change(self, fibre: Fibre, root_fibre_node: FibreNode):
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext):
+            value = use_resource(ctx, partial(self.construct_resource_factory, 1), dependencies=[1])
+            assert value == 1
+            assert self.dispose_called is False
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext):
+            value = use_resource(ctx, partial(self.construct_resource_factory, 2), dependencies=[2])
+            assert value == 2
+            assert self.dispose_called is True
+
+    def test_use_resource_calls_dispose_on_garbage_collect(self, fibre: Fibre, root_fibre_node: FibreNode):
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext):
+            value = use_resource(ctx, partial(self.construct_resource_factory, 1), dependencies=[1])
+            assert value == 1
+
+        assert self.dispose_called is False
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext):
+            pass
+
+        assert self.dispose_called is True

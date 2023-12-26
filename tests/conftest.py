@@ -14,8 +14,11 @@ from .instrumentation import CallRecordingInstrumentation  # noqa: E402
 
 
 @pytest.fixture()
-def known_keys() -> Collection[Key]:
-    return ()
+def known_keys(request: pytest.FixtureRequest) -> Collection[Key]:
+    marker = request.node.get_closest_marker("known_keys")
+    if marker is None:
+        return ()
+    return tuple(marker.args)
 
 
 @pytest.fixture()
@@ -26,6 +29,11 @@ def test_instrumentation(known_keys: Collection[Key]) -> CallRecordingInstrument
 @pytest.fixture()
 def fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
     return Fibre(instrumentation=test_instrumentation)
+
+
+@pytest.fixture()
+def non_incremental_fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
+    return Fibre(instrumentation=test_instrumentation, disable_incremental=True)
 
 
 @pytest.fixture()

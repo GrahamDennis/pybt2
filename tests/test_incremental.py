@@ -10,7 +10,7 @@ from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
 
 
-@pytest.mark.parametrize("known_keys", [["child"]])
+@pytest.mark.known_keys("child")
 def test_incremental_does_not_evaluate_child_if_unchanged(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -32,7 +32,7 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
     test_instrumentation.assert_evaluations_and_reset([])
 
 
-@pytest.mark.parametrize("known_keys", [["child"]])
+@pytest.mark.known_keys("child")
 def test_incremental_does_reevaluate_child_if_changed(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -50,7 +50,7 @@ def test_incremental_does_reevaluate_child_if_changed(
     test_instrumentation.assert_evaluations_and_reset([("child",)])
 
 
-@pytest.mark.parametrize("known_keys", [["child"]])
+@pytest.mark.known_keys("child")
 def test_evaluating_modified_child_causes_parent_to_be_marked_out_of_date(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):

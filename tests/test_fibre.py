@@ -29,7 +29,7 @@ def test_evaluate_child_with_explicit_key(fibre: Fibre, root_fibre_node: FibreNo
     )
 
 
-@pytest.mark.parametrize("known_keys", [["child1", "child2"]])
+@pytest.mark.known_keys("child1", "child2")
 def test_can_change_child(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):

@@ -14,3 +14,9 @@ exclude_also = [
 show_missing = true
 skip_covered = true
 skip_empty = true
+
+[tool.pytest.ini_options]
+markers = [
+    "known_keys",
+]
+
