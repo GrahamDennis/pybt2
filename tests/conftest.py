@@ -1,6 +1,9 @@
-from typing import Collection
+import asyncio
+from typing import AsyncIterator, Collection
 
 import pytest
+import pytest_asyncio
+from aiotools import VirtualClock
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import Key
@@ -32,15 +35,14 @@ def fibre(test_instrumentation: CallRecordingInstrumentation, request: pytest.Fi
 
 
 @pytest.fixture()
-def non_incremental_fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
-    return Fibre(instrumentation=test_instrumentation, incremental=False)
-
-
-@pytest.fixture()
-def incremental_fibre(test_instrumentation: CallRecordingInstrumentation) -> Fibre:
-    return Fibre(instrumentation=test_instrumentation, incremental=True)
-
-
-@pytest.fixture()
 def root_fibre_node() -> FibreNode:
     return FibreNode(key="root", parent=None, props_type=ExternalFunctionProps)
+
+
+@pytest_asyncio.fixture()
+async def virtual_clock() -> AsyncIterator[VirtualClock]:
+    virtual_clock = VirtualClock()
+    with virtual_clock.patch_loop():
+        yield virtual_clock
+        # Ensure any pending cancellations are run
+        await asyncio.sleep(1)

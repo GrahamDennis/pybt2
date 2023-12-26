@@ -67,9 +67,8 @@ def test_can_set_and_retrieve_context_value(
 
 @pytest.mark.known_keys("context-provider", "intermediate", "leaf")
 def test_only_nodes_using_context_are_marked_out_of_date(
-    incremental_fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
-    fibre = incremental_fibre
     context_provider_child = EvaluateChild(
         key="intermediate", child=ConsumeContextValue(key="leaf", context_key=IntContextKey)
     )
@@ -104,6 +103,15 @@ def test_only_nodes_using_context_are_marked_out_of_date(
     # intermediate node is skipped because it isn't out-of-date
     test_instrumentation.assert_evaluations_and_reset(
         [("context-provider",), ("context-provider", "intermediate", "leaf")]
+        if fibre.incremental
+        else [
+            ("context-provider",),
+            (
+                "context-provider",
+                "intermediate",
+            ),
+            ("context-provider", "intermediate", "leaf"),
+        ]
     )
 
 

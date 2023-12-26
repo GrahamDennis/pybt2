@@ -18,7 +18,7 @@ T = TypeVar("T")
 
 Reducer = Union[T, Callable[[T], T]]
 Setter = Callable[[Reducer[T]], None]
-Task = Callable[[], None]
+Task = Callable[[], Any]
 OnDispose = Callable[[Task], None]
 Dependencies = Sequence[Any]
 

@@ -11,9 +11,10 @@ from .utils import ReturnArgument, run_in_fibre
 
 def test_evaluate_child(fibre: Fibre, root_fibre_node: FibreNode):
     @run_in_fibre(fibre, root_fibre_node)
-    def execute(ctx: CallContext):
-        assert ctx.evaluate_child(ReturnArgument(1), key="child") == 1
+    def execute(ctx: CallContext) -> int:
+        return ctx.evaluate_child(ReturnArgument(1), key="child")
 
+    assert execute.result == 1
     assert root_fibre_node.get_fibre_node(("root", "child")).get_fibre_node_state() == FibreNodeState(
         props=ReturnArgument(1), result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
     )
@@ -21,9 +22,10 @@ def test_evaluate_child(fibre: Fibre, root_fibre_node: FibreNode):
 
 def test_evaluate_child_with_explicit_key(fibre: Fibre, root_fibre_node: FibreNode):
     @run_in_fibre(fibre, root_fibre_node)
-    def execute(ctx: CallContext):
-        assert ctx.evaluate_child(ReturnArgument(1, key="child")) == 1
+    def execute(ctx: CallContext) -> int:
+        return ctx.evaluate_child(ReturnArgument(1, key="child"))
 
+    assert execute.result == 1
     assert root_fibre_node.get_fibre_node(("root", "child")).get_fibre_node_state() == FibreNodeState(
         props=ReturnArgument(1, key="child"), result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
     )
@@ -32,15 +34,17 @@ def test_evaluate_child_with_explicit_key(fibre: Fibre, root_fibre_node: FibreNo
 @pytest.mark.known_keys("child1", "child2")
 def test_can_change_child(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
     @run_in_fibre(fibre, root_fibre_node)
-    def execute_1(ctx: CallContext):
-        assert ctx.evaluate_child(ReturnArgument(1), key="child1") == 1
+    def execute_1(ctx: CallContext) -> int:
+        return ctx.evaluate_child(ReturnArgument(1), key="child1")
 
+    assert execute_1.result == 1
     test_instrumentation.assert_evaluations_and_reset([("child1",)])
 
     @run_in_fibre(fibre, root_fibre_node)
-    def execute_2(ctx: CallContext):
-        assert ctx.evaluate_child(ReturnArgument(1), key="child2") == 1
+    def execute_2(ctx: CallContext) -> int:
+        return ctx.evaluate_child(ReturnArgument(1), key="child2")
 
+    assert execute_2.result == 1
     test_instrumentation.assert_evaluations_and_reset([("child2",)])
 
 

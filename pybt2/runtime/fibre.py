@@ -91,12 +91,12 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         else:
             return iter(self._successors)
 
-    def enqueue_update(self, update: UpdateT) -> None:
+    def enqueue_update(self, update: UpdateT, schedule_on_fibre: "Fibre") -> None:
         if self._enqueued_updates is None:
             self._enqueued_updates = [update]
         else:
             self._enqueued_updates.append(update)
-        self._next_dependencies_version += 1
+        self.increment_next_dependencies_version_and_schedule(schedule_on_fibre)
 
     def _create_execution_token(self) -> FibreNodeExecutionToken[UpdateT]:
         return FibreNodeExecutionToken(
@@ -213,7 +213,7 @@ class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
     instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
-    _incremental: bool = True
+    incremental: bool = field(default=True, on_setattr=setters.frozen)
 
     def run(
         self, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT], props: PropsT
@@ -222,7 +222,7 @@ class Fibre:
 
         try:
             self._evaluation_stack.append(fibre_node)
-            current_fibre_node_state = fibre_node.run(fibre=self, props=props, incremental=self._incremental)
+            current_fibre_node_state = fibre_node.run(fibre=self, props=props, incremental=self.incremental)
         finally:
             self._evaluation_stack.pop()
 

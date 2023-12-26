@@ -1,10 +1,11 @@
-from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, cast
+import asyncio
+from typing import Awaitable, Callable, Generic, Iterator, Optional, Tuple, TypeVar, cast
 
 from attr import field, frozen
 from typing_extensions import Self, override
 
 from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext
+from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
 from pybt2.runtime.types import (
     NO_PREDECESSORS,
     Dependencies,
@@ -49,7 +50,10 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
             result_version = previous_state.result_version + 1
         else:
             value = self.value
-            setter = fibre_node.enqueue_update
+
+            def setter(reducer: Reducer[T]) -> None:
+                fibre_node.enqueue_update(reducer, fibre)
+
             result_version = 1
         return FibreNodeState(
             props=self,
@@ -145,3 +149,69 @@ def use_effect(
     ctx: CallContext, effect: Callable[[OnDispose], None], dependencies: Dependencies, key: Optional[Key] = None
 ) -> None:
     return use_resource(ctx, effect, dependencies, key)
+
+
+@frozen
+class AsyncSuccess(Generic[T]):
+    value: T
+
+
+@frozen
+class AsyncFailure:
+    exception: BaseException
+
+
+@frozen
+class AsyncRunning:
+    pass
+
+
+@frozen
+class AsyncCancelled:
+    pass
+
+
+AsyncResult = AsyncSuccess[T] | AsyncFailure | AsyncRunning | AsyncCancelled
+
+_ASYNC_RUNNING = AsyncRunning()
+_ASYNC_CANCELLED = AsyncCancelled()
+
+
+@frozen
+class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
+    awaitable_factory: Callable[[], Awaitable[T]] = field(eq=False)
+    dependencies: Dependencies
+    loop: Optional[asyncio.AbstractEventLoop] = field(eq=False, default=None)
+
+    def __call__(self, ctx: CallContext) -> AsyncResult[T]:
+        async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key="result")
+
+        def construct_awaitable(on_dispose: OnDispose) -> asyncio.Task[T]:
+            def on_done(task: asyncio.Task[T]):
+                if task.cancelled():
+                    set_async_result(_ASYNC_CANCELLED)
+                elif (exception := task.exception()) is not None:
+                    set_async_result(AsyncFailure(exception))
+                else:
+                    set_async_result(AsyncSuccess(task.result()))
+
+            awaitable = self.awaitable_factory()
+
+            task: asyncio.Task[T] = asyncio.ensure_future(awaitable, loop=self.loop)
+            task.add_done_callback(on_done)
+            on_dispose(task.cancel)
+            return task
+
+        use_resource(ctx, construct_awaitable, self.dependencies, key="task")
+
+        return async_result
+
+
+def use_async(
+    ctx: CallContext,
+    awaitable_factory: Callable[[], Awaitable[T]],
+    dependencies: Dependencies,
+    loop: Optional[asyncio.BaseEventLoop] = None,
+    key: Optional[Key] = None,
+) -> AsyncResult[T]:
+    return ctx.evaluate_child(UseAsync(awaitable_factory, dependencies, loop), key=key)
