@@ -12,13 +12,9 @@ from pybt2.runtime.types import (
     FibreNodeState,
     Key,
     OnDispose,
-    PropsT,
     Reducer,
-    ResultT,
     Setter,
-    StateT,
     Task,
-    UpdateT,
 )
 
 T = TypeVar("T")
@@ -149,10 +145,3 @@ def use_effect(
     ctx: CallContext, effect: Callable[[OnDispose], None], dependencies: Dependencies, key: Optional[Key] = None
 ) -> None:
     return use_resource(ctx, effect, dependencies, key)
-
-
-def use_fibre_node_result(ctx: CallContext, fibre_node: FibreNode[PropsT, ResultT, StateT, UpdateT]) -> ResultT:
-    ctx.add_predecessor(fibre_node)
-    fibre_node_state = fibre_node.get_fibre_node_state()
-    assert fibre_node_state is not None
-    return fibre_node_state.result

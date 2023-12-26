@@ -5,7 +5,7 @@ import pytest
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.hooks import UseStateHook, use_resource, use_state
+from pybt2.runtime.hooks import UseStateHook, use_effect, use_memo, use_resource, use_state
 from pybt2.runtime.types import OnDispose, Setter
 
 from .instrumentation import CallRecordingInstrumentation
@@ -167,3 +167,60 @@ class TestUseResource:
             pass
 
         assert self.dispose_called is True
+
+    def test_use_resource_supports_no_disposal(self, fibre: Fibre, root_fibre_node: FibreNode):
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute(ctx: CallContext):
+            value = use_resource(ctx, lambda _: 1, dependencies=[1], key="use_resource")
+            assert value == 1
+
+        use_resource_node = root_fibre_node.get_fibre_node(("root", "use_resource"))
+        assert (use_resource_node_state := use_resource_node.get_fibre_node_state()) is not None
+        assert use_resource_node_state.state is None
+
+        try:
+            use_resource_node.dispose()
+        except Exception as e:
+            raise Exception("Unexpected exception raised during disposal of use_resource_node") from e
+
+    def test_use_memo(self, non_incremental_fibre: Fibre, root_fibre_node: FibreNode):
+        fibre = non_incremental_fibre
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext):
+            value = use_memo(ctx, lambda: 1, dependencies=[1])
+            assert value == 1
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext):
+            value = use_memo(ctx, lambda: 2, dependencies=[1])
+            assert value == 1
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_3(ctx: CallContext):
+            value = use_memo(ctx, lambda: 3, dependencies=[3])
+            assert value == 3
+
+    def test_use_effect(self, non_incremental_fibre: Fibre, root_fibre_node: FibreNode):
+        fibre = non_incremental_fibre
+
+        counter: int = 0
+
+        def increment_counter() -> None:
+            nonlocal counter
+            counter += 1
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext):
+            use_effect(ctx, lambda _: increment_counter(), dependencies=[1])
+            assert counter == 1
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext):
+            use_effect(ctx, lambda _: increment_counter(), dependencies=[1])
+            assert counter == 1
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_3(ctx: CallContext):
+            use_effect(ctx, lambda _: increment_counter(), dependencies=[2])
+            assert counter == 2
