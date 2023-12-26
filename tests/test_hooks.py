@@ -1,6 +1,6 @@
 import asyncio
 from functools import partial
-from typing import TypeVar
+from typing import Callable, TypeVar
 
 import pytest
 
@@ -14,6 +14,7 @@ from pybt2.runtime.hooks import (
     AsyncSuccess,
     UseStateHook,
     use_async,
+    use_callback,
     use_effect,
     use_memo,
     use_resource,
@@ -212,6 +213,17 @@ class TestUseResource:
             return use_memo(ctx, lambda: 3, dependencies=[3])
 
         assert execute_3.result == 3
+
+    def test_use_callback(self, fibre: Fibre, root_fibre_node: FibreNode):
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_1(ctx: CallContext) -> Callable[[], int]:
+            return use_callback(ctx, lambda: 1, dependencies=[1])
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute_2(ctx: CallContext) -> Callable[[], int]:
+            return use_callback(ctx, lambda: 1, dependencies=[1])
+
+        assert execute_2.result is execute_1.result
 
     def test_use_effect(self, fibre: Fibre, root_fibre_node: FibreNode):
         counter: int = 0

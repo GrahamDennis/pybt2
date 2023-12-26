@@ -139,3 +139,11 @@ def test_assert_context_has_value_will_fail_if_no_context_provided(
         @run_in_fibre(fibre, root_fibre_node)
         def execute_1(ctx: CallContext):
             ctx.evaluate_child(AssertContextHasValue(IntContextKey, value=1))
+
+
+def test_context_keys_use_identity_equality():
+    context_key_1 = ContextKey[int]("context")
+    context_key_2 = ContextKey[int]("context")
+
+    assert context_key_1 != context_key_2
+    assert hash(context_key_1) != hash(context_key_2)

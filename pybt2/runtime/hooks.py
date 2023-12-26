@@ -1,5 +1,5 @@
 import asyncio
-from typing import Awaitable, Callable, Generic, Iterator, Optional, Tuple, TypeVar, cast
+from typing import Awaitable, Callable, Generic, Iterator, Optional, ParamSpec, Tuple, TypeVar, cast
 
 from attr import field, frozen
 from typing_extensions import Self, override
@@ -143,6 +143,15 @@ def use_resource(
 
 def use_memo(ctx: CallContext, factory: Callable[[], T], dependencies: Dependencies, key: Optional[Key] = None) -> T:
     return use_resource(ctx, lambda _: factory(), dependencies, key)
+
+
+P = ParamSpec("P")
+
+
+def use_callback(
+    ctx: CallContext, callback: Callable[P, T], dependencies: Dependencies, key: Optional[Key] = None
+) -> Callable[P, T]:
+    return use_resource(ctx, lambda _: callback, dependencies, key)
 
 
 def use_effect(
