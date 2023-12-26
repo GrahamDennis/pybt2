@@ -42,6 +42,9 @@ GeneratorCall = SendValue | RaiseException
 class Scheduler:
     _queue: deque[GeneratorCall] = Factory(deque)
 
+    def schedule(self, generator: Generator) -> None:
+        self._queue.append(SendValue(stack=[], generator=generator, value=None))
+
     def run(self) -> None:
         while self._queue:
             generator_call = self._queue.popleft()
@@ -56,6 +59,14 @@ class Scheduler:
                     parent_stack = generator_call.stack
                     parent_generator = parent_stack.pop()
                     self._queue.append(SendValue(stack=parent_stack, generator=parent_generator, value=result))
+            except StopIteration as err:
+                if generator_call.stack:
+                    parent_stack = generator_call.stack
+                    parent_generator = parent_stack.pop()
+                    self._queue.append(SendValue(stack=parent_stack, generator=parent_generator, value=err.value))
+                else:
+                    # Nothing left to handle, just drop
+                    pass
             except Exception as err:
                 if generator_call.stack:
                     parent_stack = generator_call.stack
