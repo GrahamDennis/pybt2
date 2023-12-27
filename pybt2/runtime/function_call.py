@@ -27,7 +27,7 @@ def auto_generated_child_key(child_idx: int) -> Key:
     return child_idx
 
 
-@mutable
+@mutable(eq=False, weakref_slot=False)
 class CallContext:
     _fibre: Fibre
     _fibre_node: FibreNode

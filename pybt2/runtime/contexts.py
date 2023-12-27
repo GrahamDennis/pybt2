@@ -16,7 +16,7 @@ def _context_value_key(context_key: ContextKey[T]) -> str:
     return f"__ContextProvider.Value.{context_key.name}"
 
 
-@frozen
+@frozen(weakref_slot=False)
 class ContextValue(FibreNodeFunction[T, None, None], Generic[T]):
     value: T
 
@@ -46,7 +46,7 @@ class ContextValue(FibreNodeFunction[T, None, None], Generic[T]):
         )
 
 
-@frozen
+@frozen(weakref_slot=False)
 class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT]):
     context_key: ContextKey[T]
     value: T

@@ -38,7 +38,7 @@ class RaiseException(BaseGeneratorCall[YieldType, SendType, ReturnType], Generic
 GeneratorCall = SendValue | RaiseException
 
 
-@mutable
+@mutable(eq=False)
 class Scheduler:
     _queue: deque[GeneratorCall] = Factory(deque)
 

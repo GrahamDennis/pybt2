@@ -27,7 +27,7 @@ NO_CHILDREN: Sequence["FibreNode"] = NO_PREDECESSORS
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
-@frozen
+@frozen(weakref_slot=False)
 class FibreNodeExecutionToken(Generic[UpdateT]):
     dependencies_version: int
     _enqueued_updates: Optional[list[UpdateT]]
@@ -40,7 +40,7 @@ class FibreNodeExecutionToken(Generic[UpdateT]):
             return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
 
 
-@frozen
+@frozen(weakref_slot=False)
 class FibreNodeFunction(Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta):
     key: Optional[Key] = field(default=None, kw_only=True)
 
@@ -62,7 +62,7 @@ class FibreNodeFunction(Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta):
 PropsT = TypeVar("PropsT", contravariant=True, bound=FibreNodeFunction)
 
 
-@frozen
+@frozen(weakref_slot=False)
 class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     props: PropsT
     result: ResultT
@@ -72,7 +72,7 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     children: Sequence["FibreNode"]
 
 
-@frozen(eq=False)
+@frozen(eq=False, weakref_slot=False)
 class ContextKey(Generic[T]):
     name: str
 

@@ -24,7 +24,7 @@ T = TypeVar("T")
 UseStateResult = Tuple[T, Setter[T]]
 
 
-@frozen
+@frozen(weakref_slot=False)
 class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Generic[T]):
     value: T = field(eq=False)
 
@@ -74,7 +74,7 @@ UseResourceHookResourceFactory = Callable[[OnDispose], T]
 UseResourceHookState = Optional[Task]
 
 
-@frozen
+@frozen(weakref_slot=False)
 class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[T]):
     resource_factory: UseResourceHookResourceFactory[T] = field(eq=False)
     dependencies: Dependencies
@@ -163,22 +163,22 @@ def use_effect(
     return use_resource(ctx, effect, dependencies, key)
 
 
-@frozen
+@frozen(weakref_slot=False)
 class AsyncSuccess(Generic[T]):
     value: T
 
 
-@frozen
+@frozen(weakref_slot=False)
 class AsyncFailure:
     exception: BaseException
 
 
-@frozen
+@frozen(weakref_slot=False)
 class AsyncRunning:
     pass
 
 
-@frozen
+@frozen(weakref_slot=False)
 class AsyncCancelled:
     pass
 
@@ -189,7 +189,7 @@ _ASYNC_RUNNING = AsyncRunning()
 _ASYNC_CANCELLED = AsyncCancelled()
 
 
-@frozen
+@frozen(weakref_slot=False)
 class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
     awaitable_factory: Callable[[], Awaitable[T]] = field(eq=False)
     dependencies: Dependencies

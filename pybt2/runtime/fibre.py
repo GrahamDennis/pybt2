@@ -38,7 +38,7 @@ def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[ContextKey, "Fibre
     return _get_contexts(fibre_node.parent)
 
 
-@mutable(eq=False)
+@mutable(eq=False, weakref_slot=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     key: Key = field(on_setattr=setters.frozen)
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
@@ -226,7 +226,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         raise KeyError(key_path)
 
 
-@mutable
+@mutable(eq=False, weakref_slot=False)
 class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
