@@ -22,8 +22,8 @@ from pybt2.runtime.types import (
 T = TypeVar("T")
 
 
-def auto_generated_child_key(child_idx: int) -> str:
-    return f"__auto_${child_idx}"
+def auto_generated_child_key(child_idx: int) -> Key:
+    return child_idx
 
 
 @mutable
