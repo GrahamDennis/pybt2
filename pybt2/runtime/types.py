@@ -23,6 +23,7 @@ OnDispose = Callable[[Task], None]
 Dependencies = Sequence[Any]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
+NO_CHILDREN: Sequence["FibreNode"] = NO_PREDECESSORS
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
@@ -68,6 +69,7 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     result_version: int
     state: StateT
     predecessors: Sequence["FibreNode"]
+    children: Sequence["FibreNode"]
 
 
 @frozen(eq=False)

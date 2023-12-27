@@ -7,6 +7,7 @@ from typing_extensions import Self, override
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
 from pybt2.runtime.types import (
+    NO_CHILDREN,
     NO_PREDECESSORS,
     Dependencies,
     FibreNodeFunction,
@@ -61,6 +62,7 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
             result_version=result_version,
             state=None,
             predecessors=NO_PREDECESSORS,
+            children=NO_CHILDREN,
         )
 
 
@@ -104,6 +106,7 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
             result_version=result_version,
             state=dispose,
             predecessors=NO_PREDECESSORS,
+            children=NO_CHILDREN,
         )
 
     def construct_resource(self, resource_factory: UseResourceHookResourceFactory[T]) -> tuple[T, Optional[Task]]:

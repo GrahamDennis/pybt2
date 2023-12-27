@@ -1,11 +1,12 @@
 from collections import deque
-from typing import Any, ChainMap, Generic, Iterator, Optional, Set, Type, cast
+from typing import Any, ChainMap, Generic, Iterator, Optional, Sequence, Set, Type, cast
 
 from attr import Factory, field, mutable, setters
 
 from pybt2.runtime.exceptions import PropsTypeConflictError, PropTypesNotIdenticalError
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
 from pybt2.runtime.types import (
+    NO_CHILDREN,
     NO_PREDECESSORS,
     ContextKey,
     FibreNodeExecutionToken,
@@ -150,15 +151,26 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         self._fibre_node_state = next_fibre_node_state
         self._previous_dependencies_version = execution_token.dependencies_version
 
-        predecessors_changed = (
-            previous_fibre_node_state is None
-            or previous_fibre_node_state.predecessors != next_fibre_node_state.predecessors
-        )
+        previous_predecessors: Sequence[FibreNode]
+        previous_children: Sequence[FibreNode]
+        if previous_fibre_node_state is None:
+            previous_predecessors = NO_PREDECESSORS
+            previous_children = NO_CHILDREN
+        else:
+            previous_predecessors = previous_fibre_node_state.predecessors
+            previous_children = previous_fibre_node_state.children
+        next_predecessors = next_fibre_node_state.predecessors
+        next_children = next_fibre_node_state.children
+
         # Handle change in predecessors
-        if predecessors_changed:
+        if previous_predecessors != next_predecessors:
             self._on_predecessors_changed(
-                previous_fibre_node_state=previous_fibre_node_state, next_fibre_node_state=next_fibre_node_state
+                previous_predecessors=previous_predecessors, next_predecessors=next_predecessors
             )
+
+        # Handle change in children
+        if previous_children != next_children:
+            self._on_children_changed(previous_children=previous_children, next_children=next_children)
         if self._enqueued_updates is not None:
             del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
@@ -167,31 +179,37 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     def _on_predecessors_changed(
         self,
         *,
-        previous_fibre_node_state: Optional[FibreNodeState[PropsT, ResultT, StateT]],
-        next_fibre_node_state: FibreNodeState[PropsT, ResultT, StateT],
+        previous_predecessors: Sequence["FibreNode"],
+        next_predecessors: Sequence["FibreNode"],
     ) -> None:
-        previous_predecessors = (
-            previous_fibre_node_state.predecessors if previous_fibre_node_state is not None else NO_PREDECESSORS
-        )
-        next_predecessors = next_fibre_node_state.predecessors
-        for previous_predecessor in previous_predecessors:
-            if previous_predecessor not in next_predecessors and previous_predecessor.parent is not self:
-                previous_predecessor.remove_successor(self)
-        for next_predecessor in next_predecessors:
-            if next_predecessor not in previous_predecessors and next_predecessor.parent is not self:
-                next_predecessor.add_successor(self)
-        if previous_fibre_node_state is not None and previous_fibre_node_state.predecessors:
-            next_children = {child for child in next_fibre_node_state.predecessors if child.parent is self}
-            for previous_child in previous_fibre_node_state.predecessors:
-                if previous_child.parent is not self or previous_child in next_children:
+        if previous_predecessors:
+            next_predecessors_set = set(next_predecessors)
+            for previous_predecessor in previous_predecessors:
+                if previous_predecessor not in next_predecessors_set:
+                    previous_predecessor.remove_successor(self)
+        if next_predecessors:
+            previous_predecessors_set = set(previous_predecessors)
+            for next_predecessor in next_predecessors:
+                if next_predecessor not in previous_predecessors_set:
+                    next_predecessor.add_successor(self)
+
+    def _on_children_changed(
+        self,
+        *,
+        previous_children: Sequence["FibreNode"],
+        next_children: Sequence["FibreNode"],
+    ):
+        if previous_children:
+            next_children_set = set(next_children)
+            for previous_child in previous_children:
+                if previous_child in next_children_set:
                     continue
                 previous_child.dispose()
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
-            for predecessor in fibre_node_state.predecessors:
-                if predecessor.parent is self:
-                    predecessor.dispose()
+            for child in fibre_node_state.children:
+                child.dispose()
             cast(FibreNodeFunction[ResultT, StateT, UpdateT], self.props_type).dispose(
                 cast(FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT], fibre_node_state)
             )
@@ -202,9 +220,9 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         current_key_path_length = len(self.key_path)
         if key_path[:current_key_path_length] == self.key_path and self._fibre_node_state is not None:
             child_key = key_path[current_key_path_length]
-            for predecessor in self._fibre_node_state.predecessors:
-                if predecessor.parent is self and predecessor.key == child_key:
-                    return predecessor.get_fibre_node(key_path)
+            for child in self._fibre_node_state.children:
+                if child.key == child_key:
+                    return child.get_fibre_node(key_path)
         raise KeyError(key_path)
 
 

@@ -3,7 +3,7 @@ import pytest
 from pybt2.runtime.exceptions import PropTypesNotIdenticalError
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeFunction, FibreNodeState
+from pybt2.runtime.types import NO_CHILDREN, NO_PREDECESSORS, FibreNodeFunction, FibreNodeState
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
@@ -16,7 +16,12 @@ def test_evaluate_child(fibre: Fibre, root_fibre_node: FibreNode):
 
     assert execute.result == 1
     assert root_fibre_node.get_fibre_node(("root", "child")).get_fibre_node_state() == FibreNodeState(
-        props=ReturnArgument(1), result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
+        props=ReturnArgument(1),
+        result=1,
+        result_version=1,
+        state=None,
+        predecessors=NO_PREDECESSORS,
+        children=NO_CHILDREN,
     )
 
 
@@ -27,7 +32,12 @@ def test_evaluate_child_with_explicit_key(fibre: Fibre, root_fibre_node: FibreNo
 
     assert execute.result == 1
     assert root_fibre_node.get_fibre_node(("root", "child")).get_fibre_node_state() == FibreNodeState(
-        props=ReturnArgument(1, key="child"), result=1, result_version=1, state=None, predecessors=NO_PREDECESSORS
+        props=ReturnArgument(1, key="child"),
+        result=1,
+        result_version=1,
+        state=None,
+        predecessors=NO_PREDECESSORS,
+        children=NO_CHILDREN,
     )
 
 

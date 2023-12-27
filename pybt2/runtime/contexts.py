@@ -5,7 +5,7 @@ from typing_extensions import Self
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.types import NO_PREDECESSORS, ContextKey, FibreNodeFunction, FibreNodeState, ResultT
+from pybt2.runtime.types import NO_CHILDREN, NO_PREDECESSORS, ContextKey, FibreNodeFunction, FibreNodeState, ResultT
 
 T = TypeVar("T")
 
@@ -37,7 +37,12 @@ class ContextValue(FibreNodeFunction[T, None, None], Generic[T]):
         else:
             result_version = 1
         return FibreNodeState(
-            props=self, result=self.value, result_version=result_version, state=None, predecessors=NO_PREDECESSORS
+            props=self,
+            result=self.value,
+            result_version=result_version,
+            state=None,
+            predecessors=NO_PREDECESSORS,
+            children=NO_CHILDREN,
         )
 
 
@@ -55,10 +60,10 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, ResultT, None]:
         if previous_state is not None:
-            context_value_node = cast(FibreNode[ContextValue[T], T, None, None], previous_state.predecessors[0])
+            context_value_node = cast(FibreNode[ContextValue[T], T, None, None], previous_state.children[0])
             previous_child_node = cast(
                 FibreNode[FibreNodeFunction[ResultT, Any, Any], ResultT, Any, Any],
-                previous_state.predecessors[1],
+                previous_state.children[1],
             )
             fibre.run(context_value_node, ContextValue(self.value))
 
@@ -77,7 +82,8 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
                     if child_result.result_version == previous_child_result.result_version
                     else previous_state.result_version + 1,
                     state=None,
-                    predecessors=previous_state.predecessors,
+                    predecessors=NO_PREDECESSORS,
+                    children=previous_state.children,
                 )
         context_value_node = FibreNode.create(
             key=_context_value_key(self.context_key),
@@ -101,7 +107,8 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
             result=child_result.result,
             result_version=previous_state.result_version + 1 if previous_state is not None else 1,
             state=None,
-            predecessors=(
+            predecessors=NO_PREDECESSORS,
+            children=(
                 context_value_node,
                 child_fibre_node,
             ),
