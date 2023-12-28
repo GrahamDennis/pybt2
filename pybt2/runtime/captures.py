@@ -121,7 +121,8 @@ class CaptureProvider(FibreNodeFunction[None, CaptureProviderState[T], None], Ge
         previous_state: Optional[FibreNodeState[Self, None, CaptureProviderState[T]]],
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, None, CaptureProviderState[T]]:
-        self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(fibre_node, self.value), fibre)
+        if previous_state is None or previous_state.props.value != self.value:
+            self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(fibre_node, self.value), fibre)
 
         return FibreNodeState(
             props=self,

@@ -6,6 +6,7 @@ from attr import frozen
 from pybt2.runtime.captures import CaptureRoot, use_capture
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.hooks import use_state
 from pybt2.runtime.types import CaptureKey
 from tests.instrumentation import CallRecordingInstrumentation
 from tests.utils import ReturnArgument, run_in_fibre
@@ -112,3 +113,67 @@ def test_can_capture_values(
         ("capture-root", "capture-child", "capture-1") if not fibre.incremental else None,
         ("capture-root", "__CaptureRoot.Consumer"),
     )
+
+
+@pytest.mark.known_keys("capture-root", "capture-child", "use-state", "capture-leaf", "__CaptureRoot.Consumer")
+def test_incremental_capture(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @frozen
+    class CaptureChild(RuntimeCallableProps[None]):
+        def __call__(self, ctx: CallContext) -> None:
+            value, set_value = use_state(ctx, 1, key="use-state")
+            use_capture(ctx, IntCaptureKey, value, key="capture-leaf")
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        return ctx.evaluate_child(
+            CaptureRoot(
+                IntCaptureKey,
+                CaptureChild(key="capture-child"),
+                key="capture-root",
+            )
+        )
+
+    capture_child_node = root_fibre_node.get_fibre_node(("capture-root", "capture-child"))
+    use_state_node = capture_child_node.get_fibre_node(("use-state",))
+    capture_leaf_node = capture_child_node.get_fibre_node(("capture-leaf",))
+
+    assert execute_1.result == {capture_leaf_node: 1}
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("capture-root",),
+        ("capture-root", "capture-child"),
+        ("capture-root", "capture-child", "use-state"),
+        ("capture-root", "capture-child", "capture-leaf"),
+        ("capture-root", "__CaptureRoot.Consumer"),
+    )
+
+    assert (use_state_node_state := use_state_node.get_fibre_node_state()) is not None
+    use_state_node_state.result[1](2)
+
+    if fibre.incremental:
+        fibre.drain_work_queue()
+    else:
+        assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
+        fibre.run(root_fibre_node, root_fibre_node_state.props)
+
+    assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
+    assert root_fibre_node_state.result == {capture_leaf_node: 2}
+
+    if fibre.incremental:
+        test_instrumentation.assert_evaluations_and_reset(
+            ("capture-root", "capture-child", "use-state"),
+            ("capture-root", "capture-child"),
+            ("capture-root", "capture-child", "capture-leaf"),
+            ("capture-root", "__CaptureRoot.Consumer"),
+            ("capture-root",),
+        )
+    else:
+        test_instrumentation.assert_evaluations_and_reset(
+            ("capture-root",),
+            ("capture-root", "capture-child"),
+            ("capture-root", "capture-child", "use-state"),
+            ("capture-root", "capture-child", "capture-leaf"),
+            ("capture-root", "__CaptureRoot.Consumer"),
+        )
