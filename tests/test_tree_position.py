@@ -197,6 +197,53 @@ def test_can_calculate_tree_position_with_parent(
     )
 
 
+@pytest.mark.known_keys("evaluate-children", "child1", "child2", "tree-position")
+def test_can_change_tree_position(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren(
+                [ReturnArgument(1, key="child1"), ReturnArgument(2, key="child2")], key="evaluate-children"
+            )
+        )
+        evaluate_children_node = ctx.get_children()[0]
+        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        child_1, child_2 = evaluate_children_node_state.children
+        position = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position"))
+
+        assert position == (0,)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("evaluate-children",),
+        ("evaluate-children", "child1"),
+        ("evaluate-children", "child2"),
+        ("tree-position",),
+    )
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren(
+                [ReturnArgument(1, key="child1"), ReturnArgument(2, key="child2")], key="evaluate-children"
+            )
+        )
+        evaluate_children_node = ctx.get_children()[0]
+        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        child_1, child_2 = evaluate_children_node_state.children
+        position = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position"))
+
+        assert position == (1,)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        *[("evaluate-children",), ("evaluate-children", "child1"), ("evaluate-children", "child2")]
+        if not fibre.incremental
+        else [],
+        ("tree-position",),
+    )
+
+
 def test_cannot_find_tree_position_of_root_node(fibre: Fibre, root_fibre_node: FibreNode):
     with pytest.raises(CannotFindTreePositionOfRootNode):
 
