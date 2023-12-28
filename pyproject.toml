@@ -36,3 +36,7 @@ module = ["tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = ["aiotools.*"]
+ignore_missing_imports = true
