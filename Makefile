@@ -33,7 +33,7 @@ fmt:
 .PHONY: lint
 lint:             ## Run pep8, black, mypy linters.
 	$(ENV_PREFIX)ruff check pybt2/ tests/
-	$(ENV_PREFIX)mypy --ignore-missing-imports pybt2/ tests/
+	$(ENV_PREFIX)mypy pybt2/ tests/
 
 .PHONY: test
 test: lint        ## Run tests and generate coverage report.

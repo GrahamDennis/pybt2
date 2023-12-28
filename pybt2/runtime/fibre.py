@@ -226,7 +226,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         self,
         previous_tree_structure_predecessors: Sequence["FibreNode"],
         next_tree_structure_predecessors: Sequence["FibreNode"],
-    ):
+    ) -> None:
         if previous_tree_structure_predecessors:
             next_tree_structure_predecessors_set = set(next_tree_structure_predecessors)
             for previous_tree_structure_predecessor in previous_tree_structure_predecessors:
@@ -244,7 +244,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         *,
         previous_children: Sequence["FibreNode"],
         next_children: Sequence["FibreNode"],
-    ):
+    ) -> None:
         if previous_children:
             next_children_set = set(next_children)
             for previous_child in previous_children:
@@ -278,7 +278,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         except StopIteration:
             return self
 
-    def on_tree_position_changed(self, schedule_on_fibre: "Fibre"):
+    def on_tree_position_changed(self, schedule_on_fibre: "Fibre") -> None:
         if self._tree_structure_successors:
             for tree_position_successor in self._tree_structure_successors:
                 tree_position_successor.increment_next_dependencies_version_and_schedule(schedule_on_fibre)

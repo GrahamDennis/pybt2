@@ -1,7 +1,7 @@
 # This requirements are for development and testing only, not for production.
 pytest
 pytest-asyncio
-aiotools
+aiotools @ git+https://github.com/achimnol/aiotools@main # because the latest release doesn't have types
 coverage
 pytest-cov
 mypy

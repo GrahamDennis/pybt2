@@ -194,7 +194,7 @@ class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
         async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key="result")
 
         def construct_awaitable(on_dispose: OnDispose) -> asyncio.Task[T]:
-            def on_done(task: asyncio.Task[T]):
+            def on_done(task: asyncio.Task[T]) -> None:
                 if task.cancelled():
                     set_async_result(_ASYNC_CANCELLED)
                 elif (exception := task.exception()) is not None:
