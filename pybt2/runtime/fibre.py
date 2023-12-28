@@ -9,7 +9,7 @@ from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrum
 from pybt2.runtime.types import (
     NO_CHILDREN,
     NO_PREDECESSORS,
-    ContextKey,
+    AbstractContextKey,
     FibreNodeExecutionToken,
     FibreNodeFunction,
     FibreNodeState,
@@ -31,11 +31,11 @@ def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
         return *fibre_node.parent.key_path, fibre_node.key
 
 
-def _get_contexts(fibre_node: Optional["FibreNode"]) -> ChainMap[ContextKey, "FibreNode"]:
-    return fibre_node.contexts if fibre_node is not None else ChainMap[ContextKey, "FibreNode"]()
+def _get_contexts(fibre_node: Optional["FibreNode"]) -> ChainMap[AbstractContextKey, "FibreNode"]:
+    return fibre_node.contexts if fibre_node is not None else ChainMap[AbstractContextKey, "FibreNode"]()
 
 
-def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[ContextKey, "FibreNode"]:
+def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[AbstractContextKey, "FibreNode"]:
     return _get_contexts(fibre_node.parent)
 
 
@@ -49,7 +49,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
     )
-    contexts: ChainMap[ContextKey, "FibreNode"] = field(
+    contexts: ChainMap[AbstractContextKey, "FibreNode"] = field(
         default=Factory(_get_parent_contexts, takes_self=True), on_setattr=setters.frozen
     )
 
@@ -69,7 +69,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         parent: Optional["FibreNode"],
         props_type: Type[PropsT],
         fibre_node_function_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
-        contexts: Optional[ChainMap[ContextKey, "FibreNode"]] = None,
+        contexts: Optional[ChainMap[AbstractContextKey, "FibreNode"]] = None,
     ) -> "FibreNode[PropsT, ResultT, StateT, UpdateT]":
         if props_type is not fibre_node_function_type:
             raise PropTypesNotIdenticalError(props_type, fibre_node_function_type)

@@ -11,7 +11,7 @@ from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import (
     NO_CHILDREN,
     NO_PREDECESSORS,
-    ContextKey,
+    AbstractContextKey,
     FibreNodeFunction,
     FibreNodeState,
     Key,
@@ -91,7 +91,7 @@ class CallContext:
         else:
             return tuple(self._current_children)
 
-    def get_context_value_fibre_node(self, context_key: ContextKey[T]) -> FibreNode:
+    def get_context_value_fibre_node(self, context_key: AbstractContextKey) -> FibreNode:
         return self._fibre_node.contexts[context_key]
 
 

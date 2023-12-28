@@ -5,7 +5,7 @@ from typing_extensions import Self
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.types import ContextKey, FibreNodeFunction, FibreNodeState, ResultT
+from pybt2.runtime.types import AbstractContextKey, ContextKey, FibreNodeFunction, FibreNodeState, ResultT
 
 T = TypeVar("T")
 
@@ -90,7 +90,7 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
             contexts=fibre_node.contexts,
         )
         fibre.run(context_value_node, ContextValue(self.value))
-        context_map = {self.context_key: context_value_node}
+        context_map: dict[AbstractContextKey, FibreNode] = {self.context_key: context_value_node}
         child_fibre_node = FibreNode.create(
             key=self.child.key if self.child.key is not None else DEFAULT_CONTEXT_CHILD_KEY,
             parent=fibre_node,
