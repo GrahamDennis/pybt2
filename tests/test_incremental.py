@@ -26,7 +26,7 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
         result_version=1,
         state=None,
     )
-    test_instrumentation.assert_evaluations_and_reset([("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",))
 
     # Re-evaluating the root with the same child changes nothing and the child doesn't get re-evaluated
     @run_in_fibre(fibre, root_fibre_node)
@@ -34,7 +34,7 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
         return ctx.evaluate_child(ReturnArgument(1), key="child")
 
     assert execute_2.result == 1
-    test_instrumentation.assert_evaluations_and_reset([] if fibre.incremental else [("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",) if not fibre.incremental else None)
 
 
 @pytest.mark.known_keys("child")
@@ -46,7 +46,7 @@ def test_incremental_does_reevaluate_child_if_changed(
         return ctx.evaluate_child(ReturnArgument(1), key="child")
 
     assert execute_1.result == 1
-    test_instrumentation.assert_evaluations_and_reset([("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",))
 
     # Re-evaluating the root with a different child does cause a re-evaluation
     @run_in_fibre(fibre, root_fibre_node)
@@ -54,7 +54,7 @@ def test_incremental_does_reevaluate_child_if_changed(
         return ctx.evaluate_child(ReturnArgument(2), key="child")
 
     assert execute_2.result == 2
-    test_instrumentation.assert_evaluations_and_reset([("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",))
 
 
 @pytest.mark.known_keys("child")
@@ -67,10 +67,10 @@ def test_evaluating_modified_child_causes_parent_to_be_marked_out_of_date(
 
     assert execute_1.result == 1
     first_child = root_fibre_node.get_fibre_node(("child",))
-    test_instrumentation.assert_evaluations_and_reset([("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",))
 
     fibre.run(first_child, ReturnArgument(2))
 
-    test_instrumentation.assert_evaluations_and_reset([("child",)])
+    test_instrumentation.assert_evaluations_and_reset(("child",))
 
     assert root_fibre_node.is_out_of_date()

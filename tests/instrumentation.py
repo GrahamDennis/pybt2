@@ -34,8 +34,10 @@ class CallRecordingInstrumentation(FibreInstrumentation):
         else:
             return None
 
-    def assert_evaluations_and_reset(self, expected_evaluations: list[KeyPath]) -> None:
-        assert self.evaluations == expected_evaluations
+    def assert_evaluations_and_reset(self, *expected_evaluations: Optional[KeyPath]) -> None:
+        assert self.evaluations == [
+            expected_evaluation for expected_evaluation in expected_evaluations if expected_evaluation is not None
+        ]
         self.reset()
 
     def reset(self) -> None:

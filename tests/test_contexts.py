@@ -48,7 +48,7 @@ def test_can_set_and_retrieve_context_value(
             )
         )
 
-    test_instrumentation.assert_evaluations_and_reset([("context-provider",), ("context-provider", "assertion")])
+    test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "assertion"))
 
     # Change context value
     @run_in_fibre(fibre, root_fibre_node)
@@ -62,7 +62,7 @@ def test_can_set_and_retrieve_context_value(
             )
         )
 
-    test_instrumentation.assert_evaluations_and_reset([("context-provider",), ("context-provider", "assertion")])
+    test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "assertion"))
 
 
 @pytest.mark.known_keys("context-provider", "intermediate", "leaf")
@@ -85,7 +85,7 @@ def test_only_nodes_using_context_are_marked_out_of_date(
         )
 
     test_instrumentation.assert_evaluations_and_reset(
-        [("context-provider",), ("context-provider", "intermediate"), ("context-provider", "intermediate", "leaf")]
+        ("context-provider",), ("context-provider", "intermediate"), ("context-provider", "intermediate", "leaf")
     )
 
     # Change context value
@@ -102,16 +102,9 @@ def test_only_nodes_using_context_are_marked_out_of_date(
 
     # intermediate node is skipped because it isn't out-of-date
     test_instrumentation.assert_evaluations_and_reset(
-        [("context-provider",), ("context-provider", "intermediate", "leaf")]
-        if fibre.incremental
-        else [
-            ("context-provider",),
-            (
-                "context-provider",
-                "intermediate",
-            ),
-            ("context-provider", "intermediate", "leaf"),
-        ]
+        ("context-provider",),
+        ("context-provider", "intermediate") if not fibre.incremental else None,
+        ("context-provider", "intermediate", "leaf"),
     )
 
 
@@ -156,7 +149,7 @@ def test_can_create_context_without_using_value(
             )
         )
 
-    test_instrumentation.assert_evaluations_and_reset([("context-provider",), ("context-provider", "child")])
+    test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "child"))
 
 
 def test_context_keys_use_identity_equality():

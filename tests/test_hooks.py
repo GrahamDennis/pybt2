@@ -40,7 +40,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
 
     value_1, setter_1 = execute_1.result
     assert value_1 == 1
-    test_instrumentation.assert_evaluations_and_reset([("use_state",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state",))
 
     # change the value to use_state but shouldn't trigger re-evaluation
     @run_in_fibre(fibre, root_fibre_node)
@@ -51,7 +51,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     assert value_2 == 1
     assert setter_2 is setter_1
 
-    test_instrumentation.assert_evaluations_and_reset([] if fibre.incremental else [("use_state",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state",) if not fibre.incremental else None)
 
     # Call the setter
     setter_1(increment)
@@ -67,7 +67,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     value_3, setter_3 = execute_3.result
     assert value_3 == 3
     assert setter_3 is setter_1
-    test_instrumentation.assert_evaluations_and_reset([("use_state",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state",))
 
 
 @pytest.mark.known_keys("use_state")
@@ -80,7 +80,7 @@ def test_setting_same_value_does_not_change_result_version(
 
     value_1, setter_1 = execute_1.result
     assert value_1 == 1
-    test_instrumentation.assert_evaluations_and_reset([("use_state",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state",))
     use_state_fibre_node = root_fibre_node.get_fibre_node(("use_state",))
     use_state_fibre_node_state_1 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_1 is not None
@@ -90,7 +90,7 @@ def test_setting_same_value_does_not_change_result_version(
 
     assert fibre.run(use_state_fibre_node, UseStateHook(2)).result == (1, setter_1)
 
-    test_instrumentation.assert_evaluations_and_reset([("use_state",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state",))
 
     use_state_fibre_node = root_fibre_node.get_fibre_node(("use_state",))
     use_state_fibre_node_state_2 = use_state_fibre_node.get_fibre_node_state()
@@ -114,7 +114,7 @@ def test_multiple_children_and_can_reorder_preserving_state(
 
     assert execute_1.result == (1, 2)
 
-    test_instrumentation.assert_evaluations_and_reset([("use_state1",), ("use_state2",)])
+    test_instrumentation.assert_evaluations_and_reset(("use_state1",), ("use_state2",))
 
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext) -> tuple[int, int]:
@@ -267,14 +267,14 @@ class TestUseAsync:
             return use_async(ctx, lambda: self.sleep_and_return(1), dependencies=[1], key="use_async")
 
         assert execute_1.result == AsyncRunning()
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))
 
         @run_in_fibre(fibre, root_fibre_node)
         def execute_2(ctx: CallContext) -> AsyncResult[int]:
             return use_async(ctx, lambda: self.sleep_and_return(1), dependencies=[1], key="use_async")
 
         assert execute_2.result == AsyncRunning()
-        test_instrumentation.assert_evaluations_and_reset([] if fibre.incremental else [("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",) if not fibre.incremental else None)
 
         await asyncio.sleep(2)
 
@@ -286,7 +286,7 @@ class TestUseAsync:
             return use_async(ctx, lambda: self.sleep_and_return(1), dependencies=[1], key="use_async")
 
         assert execute_3.result == AsyncSuccess(1)
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))
 
     @pytest.mark.known_keys("use_async")
     async def test_use_async_cancellation(
@@ -299,7 +299,7 @@ class TestUseAsync:
             return use_async(ctx, lambda: task, dependencies=[1], key="use_async")
 
         assert execute_1.result == AsyncRunning()
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))
 
         task.cancel()
         # spin the event loop
@@ -311,7 +311,7 @@ class TestUseAsync:
             return use_async(ctx, lambda: task, dependencies=[1], key="use_async")
 
         assert execute_2.result == AsyncCancelled()
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))
 
     @pytest.mark.known_keys("use_async")
     async def test_use_async_failure(
@@ -327,7 +327,7 @@ class TestUseAsync:
             return use_async(ctx, failing_task, dependencies=[1], key="use_async")
 
         assert execute_1.result == AsyncRunning()
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))
 
         # spin the event loop
         await asyncio.sleep(0.1)
@@ -338,4 +338,4 @@ class TestUseAsync:
             return use_async(ctx, failing_task, dependencies=[1], key="use_async")
 
         assert execute_2.result == AsyncFailure(exception=exception_to_raise)
-        test_instrumentation.assert_evaluations_and_reset([("use_async",)])
+        test_instrumentation.assert_evaluations_and_reset(("use_async",))

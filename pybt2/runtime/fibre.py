@@ -258,6 +258,8 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             )
             for predecessor in fibre_node_state.predecessors:
                 predecessor.remove_successor(self)
+            for tree_structure_predecessor in fibre_node_state.tree_structure_predecessors:
+                tree_structure_predecessor.remove_tree_structure_successor(self)
             for child in fibre_node_state.children:
                 child.dispose()
             self._fibre_node_state = None

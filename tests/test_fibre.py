@@ -1,6 +1,6 @@
 import pytest
 
-from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropTypesNotIdenticalError
+from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError, PropTypesNotIdenticalError
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
 from pybt2.runtime.types import FibreNodeFunction, FibreNodeState
@@ -44,14 +44,14 @@ def test_can_change_child(fibre: Fibre, root_fibre_node: FibreNode, test_instrum
         return ctx.evaluate_child(ReturnArgument(1), key="child1")
 
     assert execute_1.result == 1
-    test_instrumentation.assert_evaluations_and_reset([("child1",)])
+    test_instrumentation.assert_evaluations_and_reset(("child1",))
 
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext) -> int:
         return ctx.evaluate_child(ReturnArgument(1), key="child2")
 
     assert execute_2.result == 1
-    test_instrumentation.assert_evaluations_and_reset([("child2",)])
+    test_instrumentation.assert_evaluations_and_reset(("child2",))
 
 
 def test_construct_fibre_node_with_inconsistent_classes():
@@ -64,6 +64,11 @@ def test_construct_fibre_node_with_inconsistent_classes():
         )
 
 
+def test_cannot_evaluate_with_wrong_props_type(fibre: Fibre, root_fibre_node: FibreNode):
+    with pytest.raises(PropsTypeConflictError):
+        fibre.run(root_fibre_node, ReturnArgument(1))
+
+
 def test_cannot_create_same_child_twice(fibre: Fibre, root_fibre_node: FibreNode):
     with pytest.raises(ChildAlreadyExistsError):
 
@@ -71,3 +76,13 @@ def test_cannot_create_same_child_twice(fibre: Fibre, root_fibre_node: FibreNode
         def execute(ctx: CallContext):
             ctx.evaluate_child(ReturnArgument(1), key="child")
             ctx.evaluate_child(ReturnArgument(1), key="child")
+
+
+def test_cannot_remove_successor_that_does_not_exist(fibre: Fibre, root_fibre_node: FibreNode):
+    with pytest.raises(KeyError):
+        root_fibre_node.remove_successor(root_fibre_node)
+
+
+def test_cannot_remove_tree_structure_successor_that_does_not_exist(fibre: Fibre, root_fibre_node: FibreNode):
+    with pytest.raises(KeyError):
+        root_fibre_node.remove_tree_structure_successor(root_fibre_node)

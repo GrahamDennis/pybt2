@@ -9,7 +9,9 @@ from tests.instrumentation import CallRecordingInstrumentation
 from tests.utils import EvaluateChildren, ReturnArgument, run_in_fibre
 
 
-@pytest.mark.known_keys("evaluate-children", "child1", "child2", "tree-position-1", "tree-position-2")
+@pytest.mark.known_keys(
+    "evaluate-children", "child1", "child2", "tree-position-1", "tree-position-2", "tree-position-3"
+)
 def test_can_calculate_tree_position(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -25,18 +27,19 @@ def test_can_calculate_tree_position(
         child_1, child_2 = evaluate_children_node_state.children
         position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
         position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
+        position_1_again = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-3"))
 
         assert position_1 == (0,)
         assert position_2 == (1,)
+        assert position_1_again == (0,)
 
     test_instrumentation.assert_evaluations_and_reset(
-        [
-            ("evaluate-children",),
-            ("evaluate-children", "child1"),
-            ("evaluate-children", "child2"),
-            ("tree-position-1",),
-            ("tree-position-2",),
-        ]
+        ("evaluate-children",),
+        ("evaluate-children", "child1"),
+        ("evaluate-children", "child2"),
+        ("tree-position-1",),
+        ("tree-position-2",),
+        ("tree-position-3",),
     )
 
     @run_in_fibre(fibre, root_fibre_node)
@@ -51,24 +54,35 @@ def test_can_calculate_tree_position(
         child_2, child_1 = evaluate_children_node_state.children
         position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
         position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
+        position_1_again = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-3"))
 
         assert position_1 == (1,)
         assert position_2 == (0,)
+        assert position_1_again == (1,)
 
     test_instrumentation.assert_evaluations_and_reset(
-        [("evaluate-children",), ("tree-position-1",), ("tree-position-2",)]
-        if fibre.incremental
-        else [
-            ("evaluate-children",),
-            ("evaluate-children", "child2"),
-            ("evaluate-children", "child1"),
-            ("tree-position-1",),
-            ("tree-position-2",),
-        ]
+        ("evaluate-children",),
+        *[("evaluate-children", "child2"), ("evaluate-children", "child1")] if not fibre.incremental else [],
+        ("tree-position-1",),
+        ("tree-position-2",),
+        ("tree-position-3",),
     )
 
 
-def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: FibreNode):
+@pytest.mark.known_keys(
+    "evaluate-root",
+    "evaluate-intermediate",
+    "leaf1",
+    "leaf2",
+    "tree-position-intermediate",
+    "tree-position-1",
+    "tree-position-2",
+    "sibling1",
+    "sibling2",
+)
+def test_can_calculate_tree_position_with_parent(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         ctx.evaluate_child(
@@ -93,12 +107,22 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
         assert position_1 == (0, 0)
         assert position_2 == (0, 1)
 
+    test_instrumentation.assert_evaluations_and_reset(
+        ("evaluate-root",),
+        ("evaluate-root", "evaluate-intermediate"),
+        ("evaluate-root", "evaluate-intermediate", "leaf1"),
+        ("evaluate-root", "evaluate-intermediate", "leaf2"),
+        ("tree-position-intermediate",),
+        ("tree-position-1",),
+        ("tree-position-2",),
+    )
+
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext):
         ctx.evaluate_child(
             EvaluateChildren[Any](
                 [
-                    ReturnArgument(1),
+                    ReturnArgument(1, key="sibling1"),
                     EvaluateChildren(
                         [ReturnArgument(1, key="leaf1"), ReturnArgument(2, key="leaf2")], key="evaluate-intermediate"
                     ),
@@ -117,13 +141,28 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
 
         assert position_1 == (1, 0)
         assert position_2 == (1, 1)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("evaluate-root",),
+        ("evaluate-root", "sibling1"),
+        *[
+            ("evaluate-root", "evaluate-intermediate"),
+            ("evaluate-root", "evaluate-intermediate", "leaf1"),
+            ("evaluate-root", "evaluate-intermediate", "leaf2"),
+        ]
+        if not fibre.incremental
+        else [],
+        ("tree-position-intermediate",),
+        ("tree-position-1",),
+        ("tree-position-2",),
+    )
 
     @run_in_fibre(fibre, root_fibre_node)
     def execute_3(ctx: CallContext):
         ctx.evaluate_child(
             EvaluateChildren[Any](
                 [
-                    ReturnArgument(1, key="other"),
+                    ReturnArgument(1, key="sibling2"),
                     EvaluateChildren(
                         [ReturnArgument(1, key="leaf1"), ReturnArgument(2, key="leaf2")], key="evaluate-intermediate"
                     ),
@@ -142,6 +181,20 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
 
         assert position_1 == (1, 0)
         assert position_2 == (1, 1)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("evaluate-root",),
+        ("evaluate-root", "sibling2"),
+        *[
+            ("evaluate-root", "evaluate-intermediate"),
+            ("evaluate-root", "evaluate-intermediate", "leaf1"),
+            ("evaluate-root", "evaluate-intermediate", "leaf2"),
+        ]
+        if not fibre.incremental
+        else [],
+        ("tree-position-intermediate",),
+        *[("tree-position-1",), ("tree-position-2",)] if not fibre.incremental else [],
+    )
 
 
 def test_cannot_find_tree_position_of_root_node(fibre: Fibre, root_fibre_node: FibreNode):
