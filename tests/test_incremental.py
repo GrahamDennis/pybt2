@@ -4,7 +4,7 @@ from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import (
     CallContext,
 )
-from pybt2.runtime.types import NO_CHILDREN, NO_PREDECESSORS, FibreNodeState
+from pybt2.runtime.types import FibreNodeState
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
@@ -25,8 +25,6 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
         result=1,
         result_version=1,
         state=None,
-        predecessors=NO_PREDECESSORS,
-        children=NO_CHILDREN,
     )
     test_instrumentation.assert_evaluations_and_reset([("child",)])
 

@@ -68,8 +68,9 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     result: ResultT
     result_version: int
     state: StateT
-    predecessors: Sequence["FibreNode"]
-    children: Sequence["FibreNode"]
+    predecessors: Sequence["FibreNode"] = NO_PREDECESSORS
+    children: Sequence["FibreNode"] = NO_CHILDREN
+    tree_structure_predecessors: Sequence["FibreNode"] = NO_PREDECESSORS
 
 
 @frozen(eq=False, weakref_slot=False)

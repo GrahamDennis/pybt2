@@ -3,7 +3,7 @@ import pytest
 from pybt2.runtime.exceptions import PropTypesNotIdenticalError
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
-from pybt2.runtime.types import NO_CHILDREN, NO_PREDECESSORS, FibreNodeFunction, FibreNodeState
+from pybt2.runtime.types import FibreNodeFunction, FibreNodeState
 
 from .instrumentation import CallRecordingInstrumentation
 from .utils import ReturnArgument, run_in_fibre
@@ -20,8 +20,6 @@ def test_evaluate_child(fibre: Fibre, root_fibre_node: FibreNode):
         result=1,
         result_version=1,
         state=None,
-        predecessors=NO_PREDECESSORS,
-        children=NO_CHILDREN,
     )
 
 
@@ -36,8 +34,6 @@ def test_evaluate_child_with_explicit_key(fibre: Fibre, root_fibre_node: FibreNo
         result=1,
         result_version=1,
         state=None,
-        predecessors=NO_PREDECESSORS,
-        children=NO_CHILDREN,
     )
 
 

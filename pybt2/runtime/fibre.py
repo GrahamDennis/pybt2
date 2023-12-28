@@ -169,24 +169,35 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
         previous_predecessors: Sequence[FibreNode]
         previous_children: Sequence[FibreNode]
+        previous_tree_structure_predecessors: Sequence[FibreNode]
         if previous_fibre_node_state is None:
             previous_predecessors = NO_PREDECESSORS
             previous_children = NO_CHILDREN
+            previous_tree_structure_predecessors = NO_PREDECESSORS
         else:
             previous_predecessors = previous_fibre_node_state.predecessors
             previous_children = previous_fibre_node_state.children
+            previous_tree_structure_predecessors = previous_fibre_node_state.tree_structure_predecessors
         next_predecessors = next_fibre_node_state.predecessors
         next_children = next_fibre_node_state.children
+        next_tree_structure_predecessors = next_fibre_node_state.tree_structure_predecessors
 
-        # Handle change in predecessors
+        # change in predecessors
         if previous_predecessors != next_predecessors:
             self._on_predecessors_changed(
                 previous_predecessors=previous_predecessors, next_predecessors=next_predecessors
             )
 
-        # Handle change in children
+        # change in children
         if previous_children != next_children:
             self._on_children_changed(fibre, previous_children=previous_children, next_children=next_children)
+
+        # change in tree structure predecessors
+        if previous_tree_structure_predecessors != next_tree_structure_predecessors:
+            self._on_tree_structure_predecessors_changed(
+                previous_tree_structure_predecessors=previous_tree_structure_predecessors,
+                next_tree_structure_predecessors=next_tree_structure_predecessors,
+            )
         if self._enqueued_updates is not None:
             del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
@@ -208,6 +219,22 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             for next_predecessor in next_predecessors:
                 if next_predecessor not in previous_predecessors_set:
                     next_predecessor.add_successor(self)
+
+    def _on_tree_structure_predecessors_changed(
+        self,
+        previous_tree_structure_predecessors: Sequence["FibreNode"],
+        next_tree_structure_predecessors: Sequence["FibreNode"],
+    ):
+        if previous_tree_structure_predecessors:
+            next_tree_structure_predecessors_set = set(next_tree_structure_predecessors)
+            for previous_tree_structure_predecessor in previous_tree_structure_predecessors:
+                if previous_tree_structure_predecessor not in next_tree_structure_predecessors_set:
+                    previous_tree_structure_predecessor.remove_tree_structure_successor(self)
+        if next_tree_structure_predecessors:
+            previous_tree_structure_predecessors_set = set(previous_tree_structure_predecessors)
+            for next_tree_structure_predecessor in next_tree_structure_predecessors:
+                if next_tree_structure_predecessor not in previous_tree_structure_predecessors_set:
+                    next_tree_structure_predecessor.add_tree_structure_successor(self)
 
     def _on_children_changed(
         self,

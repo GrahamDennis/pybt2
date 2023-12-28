@@ -1,0 +1,168 @@
+from typing import Any
+
+import pytest
+
+from pybt2.runtime.fibre import Fibre, FibreNode
+from pybt2.runtime.function_call import CallContext
+from pybt2.runtime.tree_position import CannotFindTreePositionOfRootNode, InvalidFibreNodeDependency, ReturnTreePosition
+from tests.instrumentation import CallRecordingInstrumentation
+from tests.utils import EvaluateChildren, ReturnArgument, run_in_fibre
+
+
+@pytest.mark.known_keys("evaluate-children", "child1", "child2", "tree-position-1", "tree-position-2")
+def test_can_calculate_tree_position(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren(
+                [ReturnArgument(1, key="child1"), ReturnArgument(2, key="child2")], key="evaluate-children"
+            )
+        )
+        evaluate_children_node = ctx.get_children()[0]
+        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        child_1, child_2 = evaluate_children_node_state.children
+        position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
+        position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
+
+        assert position_1 == (0,)
+        assert position_2 == (1,)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        [
+            ("evaluate-children",),
+            ("evaluate-children", "child1"),
+            ("evaluate-children", "child2"),
+            ("tree-position-1",),
+            ("tree-position-2",),
+        ]
+    )
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren(
+                [ReturnArgument(2, key="child2"), ReturnArgument(1, key="child1")], key="evaluate-children"
+            )
+        )
+        evaluate_children_node = ctx.get_children()[0]
+        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        child_2, child_1 = evaluate_children_node_state.children
+        position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
+        position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
+
+        assert position_1 == (1,)
+        assert position_2 == (0,)
+
+    test_instrumentation.assert_evaluations_and_reset(
+        [("evaluate-children",), ("tree-position-1",), ("tree-position-2",)]
+        if fibre.incremental
+        else [
+            ("evaluate-children",),
+            ("evaluate-children", "child2"),
+            ("evaluate-children", "child1"),
+            ("tree-position-1",),
+            ("tree-position-2",),
+        ]
+    )
+
+
+def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: FibreNode):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren(
+                [
+                    EvaluateChildren(
+                        [ReturnArgument(1, key="leaf1"), ReturnArgument(2, key="leaf2")], key="evaluate-intermediate"
+                    )
+                ],
+                key="evaluate-root",
+            )
+        )
+        evaluate_root_node = ctx.get_children()[0]
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
+            ("root", "evaluate-root", "evaluate-intermediate")
+        )
+        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
+        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
+        intermediate_position_node = ctx.get_children()[-1]
+        position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))
+        position_2 = ctx.evaluate_child(ReturnTreePosition(leaf_2, intermediate_position_node, key="tree-position-2"))
+
+        assert position_1 == (0, 0)
+        assert position_2 == (0, 1)
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren[Any](
+                [
+                    ReturnArgument(1),
+                    EvaluateChildren(
+                        [ReturnArgument(1, key="leaf1"), ReturnArgument(2, key="leaf2")], key="evaluate-intermediate"
+                    ),
+                ],
+                key="evaluate-root",
+            )
+        )
+        evaluate_root_node = ctx.get_children()[0]
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
+            ("root", "evaluate-root", "evaluate-intermediate")
+        )
+        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
+        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
+        intermediate_position_node = ctx.get_children()[-1]
+        position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))
+        position_2 = ctx.evaluate_child(ReturnTreePosition(leaf_2, intermediate_position_node, key="tree-position-2"))
+
+        assert position_1 == (1, 0)
+        assert position_2 == (1, 1)
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_3(ctx: CallContext):
+        ctx.evaluate_child(
+            EvaluateChildren[Any](
+                [
+                    ReturnArgument(1, key="other"),
+                    EvaluateChildren(
+                        [ReturnArgument(1, key="leaf1"), ReturnArgument(2, key="leaf2")], key="evaluate-intermediate"
+                    ),
+                ],
+                key="evaluate-root",
+            )
+        )
+        evaluate_root_node = ctx.get_children()[0]
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
+            ("root", "evaluate-root", "evaluate-intermediate")
+        )
+        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
+        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
+        intermediate_position_node = ctx.get_children()[-1]
+        position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))
+        position_2 = ctx.evaluate_child(ReturnTreePosition(leaf_2, intermediate_position_node, key="tree-position-2"))
+
+        assert position_1 == (1, 0)
+        assert position_2 == (1, 1)
+
+
+def test_cannot_find_tree_position_of_root_node(fibre: Fibre, root_fibre_node: FibreNode):
+    with pytest.raises(CannotFindTreePositionOfRootNode):
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute(ctx: CallContext):
+            ctx.evaluate_child(ReturnTreePosition(root_fibre_node, None))
+
+
+def test_parent_must_be_fully_evaluated(fibre: Fibre, root_fibre_node: FibreNode):
+    with pytest.raises(InvalidFibreNodeDependency):
+
+        @run_in_fibre(fibre, root_fibre_node)
+        def execute(ctx: CallContext):
+            ctx.evaluate_child(ReturnArgument(1, key="child"))
+            child_node = ctx.get_children()[0]
+            ctx.evaluate_child(ReturnTreePosition(child_node, None))

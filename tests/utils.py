@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from attr import frozen
 
@@ -45,3 +45,11 @@ class EvaluateChild(RuntimeCallableProps[ResultT]):
 
     def __call__(self, ctx: CallContext) -> ResultT:
         return ctx.evaluate_child(self.child)
+
+
+@frozen
+class EvaluateChildren(RuntimeCallableProps[Sequence[ResultT]]):
+    children: Sequence[FibreNodeFunction[ResultT, Any, Any]]
+
+    def __call__(self, ctx: CallContext) -> Sequence[ResultT]:
+        return tuple(ctx.evaluate_child(child) for child in self.children)
