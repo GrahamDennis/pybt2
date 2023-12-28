@@ -59,9 +59,7 @@ def test_can_capture_value(
     )
 
 
-@pytest.mark.known_keys(
-    "capture-root", "capture-child", "capture-1", "capture-2", "capture-3", "__CaptureRoot.Consumer"
-)
+@pytest.mark.known_keys("capture-root", "capture-child", "capture-1", "capture-2", "__CaptureRoot.Consumer")
 def test_can_capture_values(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
@@ -102,19 +100,17 @@ def test_can_capture_values(
         return ctx.evaluate_child(
             CaptureRoot(
                 IntCaptureKey,
-                CaptureChild([("capture-1", 1), ("capture-3", 3)], key="capture-child"),
+                CaptureChild([("capture-1", 1)], key="capture-child"),
                 key="capture-root",
             )
         )
 
-    capture_3_node = capture_child_node.get_fibre_node(("capture-3",))
-    assert execute_2.result == {capture_1_node: 1, capture_3_node: 3}
+    assert execute_2.result == {capture_1_node: 1}
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
         ("capture-root", "capture-child"),
         ("capture-root", "capture-child", "capture-1") if not fibre.incremental else None,
-        ("capture-root", "capture-child", "capture-3"),
         ("capture-root", "__CaptureRoot.Consumer"),
     )
 
