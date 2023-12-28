@@ -4,34 +4,40 @@ from typing import Generator, Generic, TypeVar
 
 from attr import Factory, frozen, mutable
 
-YieldType = TypeVar("YieldType", covariant=True)
-SendType = TypeVar("SendType", contravariant=True)
-ReturnType = TypeVar("ReturnType", covariant=True)
+YieldType_co = TypeVar("YieldType_co", covariant=True)
+SendType_contra = TypeVar("SendType_contra", contravariant=True)
+ReturnType_co = TypeVar("ReturnType_co", covariant=True)
 
 
 @frozen
-class BaseGeneratorCall(Generic[YieldType, SendType, ReturnType], metaclass=ABCMeta):
+class BaseGeneratorCall(Generic[YieldType_co, SendType_contra, ReturnType_co], metaclass=ABCMeta):
     stack: list[Generator]
-    generator: Generator[YieldType, SendType, ReturnType]
+    generator: Generator[YieldType_co, SendType_contra, ReturnType_co]
 
     @abstractmethod
-    def __call__(self) -> YieldType:
+    def __call__(self) -> YieldType_co:
         ...
 
 
 @frozen
-class SendValue(BaseGeneratorCall[YieldType, SendType, ReturnType], Generic[YieldType, SendType, ReturnType]):
-    value: SendType
+class SendValue(
+    BaseGeneratorCall[YieldType_co, SendType_contra, ReturnType_co],
+    Generic[YieldType_co, SendType_contra, ReturnType_co],
+):
+    value: SendType_contra
 
-    def __call__(self) -> YieldType:
+    def __call__(self) -> YieldType_co:
         return self.generator.send(self.value)
 
 
 @frozen
-class RaiseException(BaseGeneratorCall[YieldType, SendType, ReturnType], Generic[YieldType, SendType, ReturnType]):
+class RaiseException(
+    BaseGeneratorCall[YieldType_co, SendType_contra, ReturnType_co],
+    Generic[YieldType_co, SendType_contra, ReturnType_co],
+):
     exception: Exception
 
-    def __call__(self) -> YieldType:
+    def __call__(self) -> YieldType_co:
         return self.generator.throw(self.exception)
 
 

@@ -103,7 +103,8 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
             state=dispose,
         )
 
-    def construct_resource(self, resource_factory: UseResourceHookResourceFactory[T]) -> tuple[T, Optional[Task]]:
+    @staticmethod
+    def construct_resource(resource_factory: UseResourceHookResourceFactory[T]) -> tuple[T, Optional[Task]]:
         dispose_tasks: list[Task] = []
 
         def on_dispose(task: Task) -> None:

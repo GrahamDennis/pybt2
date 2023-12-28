@@ -1,9 +1,13 @@
 [tool.ruff]
-extend-select = ["C4", "E", "F", "G", "I", "NPY", "PD", "PT", "RUF", "SIM", "TCH", "W"]
+extend-select = ["C4", "E", "F", "G", "I", "NPY", "PD", "PL", "PT", "RUF", "SIM", "TCH", "W"]
 target-version = "py310"
 
 # change the default line length number or characters.
 line-length = 120
+
+[tool.ruff.extend-per-file-ignores]
+# Also ignore `PLR2004` (magic constants) in all test files.
+"tests/**" = ["PLR2004"]
 
 [tool.coverage.report]
 exclude_also = [

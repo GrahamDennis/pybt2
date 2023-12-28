@@ -41,6 +41,8 @@ def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[ContextKey, "Fibre
 
 @mutable(eq=False, weakref_slot=static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
+    # I'd really like to be able to say that PropsT is bound by FibreNodeFunction[ResultT, StateT, UpdateT], but that's
+    # not possible. That causes some unfortunate casts to be required throughout.
     key: Key = field(on_setattr=setters.frozen)
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
     props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]] = field(on_setattr=setters.frozen)
@@ -123,7 +125,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         )
 
     def get_fibre_node_state(self) -> Optional[FibreNodeState[PropsT, ResultT, StateT]]:
-        return self._fibre_node_state
+        return cast(FibreNodeState[PropsT, ResultT, StateT], self._fibre_node_state)
 
     def is_out_of_date(self) -> int:
         return self._next_dependencies_version != self._previous_dependencies_version
@@ -152,7 +154,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             and previous_fibre_node_state is not None
             and execution_token.dependencies_version == self._previous_dependencies_version
         ):
-            return previous_fibre_node_state
+            return cast(FibreNodeState[PropsT, ResultT, StateT], previous_fibre_node_state)
 
         fibre.instrumentation.on_node_evaluation_start(self)
         next_fibre_node_state = cast(FibreNodeFunction[ResultT, StateT, UpdateT], props).run(
@@ -201,7 +203,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         if self._enqueued_updates is not None:
             del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
-        return next_fibre_node_state
+        return cast(FibreNodeState[PropsT, ResultT, StateT], next_fibre_node_state)
 
     def _on_predecessors_changed(
         self,

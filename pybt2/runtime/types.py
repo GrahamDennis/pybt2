@@ -59,7 +59,7 @@ class FibreNodeFunction(Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta):
         pass
 
 
-PropsT = TypeVar("PropsT", contravariant=True, bound=FibreNodeFunction)
+PropsT = TypeVar("PropsT", bound=FibreNodeFunction)
 
 
 @frozen(weakref_slot=False)
