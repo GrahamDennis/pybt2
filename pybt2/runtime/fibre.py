@@ -265,6 +265,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             for child in fibre_node_state.children:
                 child.dispose()
             self._fibre_node_state = None
+            self._enqueued_updates = None
 
     def get_fibre_node(self, relative_key_path: Iterable[Key]) -> "FibreNode":
         key_path_iterator = iter(relative_key_path)

@@ -1,5 +1,17 @@
 from abc import ABCMeta, abstractmethod
-from typing import Generic, Iterator, MutableSequence, Optional, Sequence, Type, TypeVar, final
+from typing import (
+    Generic,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    cast,
+    final,
+)
 
 from attr import Factory, mutable
 from typing_extensions import Self
@@ -60,21 +72,36 @@ class CallContext:
         return None
 
     def _get_child_fibre_node(
-        self, props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]], key: Optional[Key] = None
+        self,
+        props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, FibreNode]] = None,
     ) -> FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]:
         child_key = self._next_child_key(key)
         previous_child_fibre_node: Optional[FibreNode] = self._get_previous_child_with_key(child_key)
         if previous_child_fibre_node is not None and previous_child_fibre_node.props_type is props_type:
             return previous_child_fibre_node
         else:
-            return FibreNode(key=child_key, parent=self._fibre_node, props_type=props_type)
+            return FibreNode(
+                key=child_key,
+                parent=self._fibre_node,
+                props_type=props_type,
+                contexts=self._fibre_node.contexts.new_child(
+                    cast(MutableMapping[AbstractContextKey, FibreNode], additional_contexts)
+                )
+                if additional_contexts is not None
+                else self._fibre_node.contexts,
+            )
 
     def evaluate_child(
         self,
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, FibreNode]] = None,
     ) -> ResultT:
-        child_fibre_node = self._get_child_fibre_node(type(props), key if key is not None else props.key)
+        child_fibre_node = self._get_child_fibre_node(
+            type(props), key=key if key is not None else props.key, additional_contexts=additional_contexts
+        )
         self.add_child(child_fibre_node)
         child_fibre_node_state = self._fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
@@ -91,7 +118,7 @@ class CallContext:
         else:
             return tuple(self._current_children)
 
-    def get_context_value_fibre_node(self, context_key: AbstractContextKey) -> FibreNode:
+    def get_fibre_node_for_context_key(self, context_key: AbstractContextKey) -> FibreNode:
         return self._fibre_node.contexts[context_key]
 
 
