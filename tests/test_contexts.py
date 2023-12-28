@@ -9,7 +9,7 @@ from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
 from pybt2.runtime.types import ContextKey
 
 from .instrumentation import CallRecordingInstrumentation
-from .utils import EvaluateChild, run_in_fibre
+from .utils import EvaluateChild, ReturnArgument, run_in_fibre
 
 IntContextKey = ContextKey[int]("IntContextKey")
 
@@ -139,6 +139,24 @@ def test_assert_context_has_value_will_fail_if_no_context_provided(
         @run_in_fibre(fibre, root_fibre_node)
         def execute_1(ctx: CallContext):
             ctx.evaluate_child(AssertContextHasValue(IntContextKey, value=1))
+
+
+@pytest.mark.known_keys("context-provider", "child")
+def test_can_create_context_without_using_value(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        ctx.evaluate_child(
+            ContextProvider(
+                key="context-provider",
+                context_key=IntContextKey,
+                value=1,
+                child=ReturnArgument(1, key="child"),
+            )
+        )
+
+    test_instrumentation.assert_evaluations_and_reset([("context-provider",), ("context-provider", "child")])
 
 
 def test_context_keys_use_identity_equality():

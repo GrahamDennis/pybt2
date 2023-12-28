@@ -1,19 +1,25 @@
 import asyncio
-from typing import AsyncIterator, Collection
+import gc
+import weakref
+from typing import Any, AsyncIterator, Collection, Iterator
 
 import pytest
 import pytest_asyncio
 from aiotools import VirtualClock
 
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.types import Key
+from pybt2.runtime import static_configuration
 
-from .utils import ExternalFunctionProps
+# This is necessary to enable testing that there are no dangling references to objects
+static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT = True
 
 # This is necessary to get pretty assertion failure messages from the test instrumentation module
 pytest.register_assert_rewrite("tests.instrumentation")
 
+from pybt2.runtime.fibre import Fibre, FibreNode  # noqa: E402
+from pybt2.runtime.types import Key  # noqa: E402
+
 from .instrumentation import CallRecordingInstrumentation  # noqa: E402
+from .utils import ExternalFunctionProps  # noqa: E402
 
 
 @pytest.fixture()
@@ -34,9 +40,31 @@ def fibre(test_instrumentation: CallRecordingInstrumentation, request: pytest.Fi
     return Fibre(instrumentation=test_instrumentation, incremental=request.param)
 
 
+def _get_child_node_refs(fibre_node: FibreNode) -> Iterator[weakref.ReferenceType]:
+    if (fibre_node_state := fibre_node.get_fibre_node_state()) is None:
+        return
+    for child in fibre_node_state.children:
+        yield weakref.ref(child)
+        yield from _get_child_node_refs(child)
+
+
 @pytest.fixture()
-def root_fibre_node() -> FibreNode:
-    return FibreNode(key="root", parent=None, props_type=ExternalFunctionProps)
+def root_fibre_node(fibre: Fibre) -> Iterator[FibreNode]:
+    root_fibre_node: FibreNode = FibreNode(key="root", parent=None, props_type=ExternalFunctionProps)
+    yield root_fibre_node
+
+    node_refs = list(_get_child_node_refs(root_fibre_node))
+
+    fibre.run(root_fibre_node, ExternalFunctionProps(lambda _ctx: None))
+    fibre.drain_work_queue()
+
+    references: dict[FibreNode, Any] = {}
+    for node_ref in node_refs:
+        if (node := node_ref()) is not None:
+            referrers = gc.get_referrers(node)
+            references[node] = referrers
+
+    assert references == {}
 
 
 @pytest_asyncio.fixture()

@@ -3,6 +3,7 @@ from typing import Any, ChainMap, Generic, Iterator, Optional, Sequence, Set, Ty
 
 from attr import Factory, field, mutable, setters
 
+from pybt2.runtime import static_configuration
 from pybt2.runtime.exceptions import PropsTypeConflictError, PropTypesNotIdenticalError
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
 from pybt2.runtime.types import (
@@ -38,7 +39,7 @@ def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[ContextKey, "Fibre
     return _get_contexts(fibre_node.parent)
 
 
-@mutable(eq=False, weakref_slot=False)
+@mutable(eq=False, weakref_slot=static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     key: Key = field(on_setattr=setters.frozen)
     parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
@@ -55,7 +56,10 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     _next_dependencies_version: int = 1
 
     _enqueued_updates: Optional[list[UpdateT]] = None
+    # Should this just be a list? There's a small number of nodes that have this field, so it probably doesn't make
+    # much of a difference
     _successors: Optional[Set["FibreNode"]] = None
+    _tree_structure_successors: Optional[list["FibreNode"]] = None
 
     @staticmethod
     def create(
@@ -91,6 +95,18 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             return _EMPTY_ITERATOR
         else:
             return iter(self._successors)
+
+    def add_tree_structure_successor(self, tree_structure_successor_fibre_node: "FibreNode") -> None:
+        if self._tree_structure_successors is None:
+            self._tree_structure_successors = [tree_structure_successor_fibre_node]
+        else:
+            self._tree_structure_successors.append(tree_structure_successor_fibre_node)
+
+    def remove_tree_structure_successor(self, tree_structure_successor_fibre_node: "FibreNode") -> None:
+        if self._tree_structure_successors is None:
+            raise KeyError(tree_structure_successor_fibre_node)
+        else:
+            self._tree_structure_successors.remove(tree_structure_successor_fibre_node)
 
     def enqueue_update(self, update: UpdateT, schedule_on_fibre: "Fibre") -> None:
         if self._enqueued_updates is None:
@@ -170,7 +186,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
         # Handle change in children
         if previous_children != next_children:
-            self._on_children_changed(previous_children=previous_children, next_children=next_children)
+            self._on_children_changed(fibre, previous_children=previous_children, next_children=next_children)
         if self._enqueued_updates is not None:
             del self._enqueued_updates[: execution_token.enqueued_updates_stop]
 
@@ -195,6 +211,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
 
     def _on_children_changed(
         self,
+        fibre: "Fibre",
         *,
         previous_children: Sequence["FibreNode"],
         next_children: Sequence["FibreNode"],
@@ -203,16 +220,20 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             next_children_set = set(next_children)
             for previous_child in previous_children:
                 if previous_child in next_children_set:
-                    continue
-                previous_child.dispose()
+                    previous_child.on_tree_position_changed(fibre)
+                else:
+                    previous_child.dispose()
 
     def dispose(self) -> None:
         if (fibre_node_state := self._fibre_node_state) is not None:
-            for child in fibre_node_state.children:
-                child.dispose()
             cast(FibreNodeFunction[ResultT, StateT, UpdateT], self.props_type).dispose(
                 cast(FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT], fibre_node_state)
             )
+            for predecessor in fibre_node_state.predecessors:
+                predecessor.remove_successor(self)
+            for child in fibre_node_state.children:
+                child.dispose()
+            self._fibre_node_state = None
 
     def get_fibre_node(self, key_path: KeyPath) -> "FibreNode":
         if key_path == self.key_path:
@@ -224,6 +245,11 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
                 if child.key == child_key:
                     return child.get_fibre_node(key_path)
         raise KeyError(key_path)
+
+    def on_tree_position_changed(self, schedule_on_fibre: "Fibre"):
+        if self._tree_structure_successors:
+            for tree_position_successor in self._tree_structure_successors:
+                tree_position_successor.increment_next_dependencies_version_and_schedule(schedule_on_fibre)
 
 
 @mutable(eq=False, weakref_slot=False)
@@ -267,5 +293,6 @@ class Fibre:
     def drain_work_queue(self) -> None:
         while self._work_queue:
             fibre_node = self._work_queue.popleft()
-            assert (fibre_node_state := fibre_node.get_fibre_node_state()) is not None
+            if (fibre_node_state := fibre_node.get_fibre_node_state()) is None:
+                continue
             self.run(fibre_node, fibre_node_state.props)
