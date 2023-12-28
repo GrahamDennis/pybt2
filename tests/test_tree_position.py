@@ -82,11 +82,9 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
             )
         )
         evaluate_root_node = ctx.get_children()[0]
-        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
-            ("root", "evaluate-root", "evaluate-intermediate")
-        )
-        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
-        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(("evaluate-intermediate",))
+        leaf_1 = evaluate_intermediate_node.get_fibre_node(("leaf1",))
+        leaf_2 = evaluate_intermediate_node.get_fibre_node(("leaf2",))
         ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
         intermediate_position_node = ctx.get_children()[-1]
         position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))
@@ -109,11 +107,9 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
             )
         )
         evaluate_root_node = ctx.get_children()[0]
-        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
-            ("root", "evaluate-root", "evaluate-intermediate")
-        )
-        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
-        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(("evaluate-intermediate",))
+        leaf_1 = evaluate_intermediate_node.get_fibre_node(("leaf1",))
+        leaf_2 = evaluate_intermediate_node.get_fibre_node(("leaf2",))
         ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
         intermediate_position_node = ctx.get_children()[-1]
         position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))
@@ -136,11 +132,9 @@ def test_can_calculate_tree_position_with_parent(fibre: Fibre, root_fibre_node: 
             )
         )
         evaluate_root_node = ctx.get_children()[0]
-        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(
-            ("root", "evaluate-root", "evaluate-intermediate")
-        )
-        leaf_1 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf1"))
-        leaf_2 = evaluate_root_node.get_fibre_node(("root", "evaluate-root", "evaluate-intermediate", "leaf2"))
+        evaluate_intermediate_node = evaluate_root_node.get_fibre_node(("evaluate-intermediate",))
+        leaf_1 = evaluate_intermediate_node.get_fibre_node(("leaf1",))
+        leaf_2 = evaluate_intermediate_node.get_fibre_node(("leaf2",))
         ctx.evaluate_child(ReturnTreePosition(evaluate_intermediate_node, None, key="tree-position-intermediate"))
         intermediate_position_node = ctx.get_children()[-1]
         position_1 = ctx.evaluate_child(ReturnTreePosition(leaf_1, intermediate_position_node, key="tree-position-1"))

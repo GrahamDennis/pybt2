@@ -19,7 +19,7 @@ def test_incremental_does_not_evaluate_child_if_unchanged(
         return ctx.evaluate_child(ReturnArgument(1), key="child")
 
     assert execute_1.result == 1
-    first_child = root_fibre_node.get_fibre_node(("root", "child"))
+    first_child = root_fibre_node.get_fibre_node(("child",))
     assert first_child.get_fibre_node_state() == FibreNodeState(
         props=ReturnArgument(1),
         result=1,
@@ -66,7 +66,7 @@ def test_evaluating_modified_child_causes_parent_to_be_marked_out_of_date(
         return ctx.evaluate_child(ReturnArgument(1), key="child")
 
     assert execute_1.result == 1
-    first_child = root_fibre_node.get_fibre_node(("root", "child"))
+    first_child = root_fibre_node.get_fibre_node(("child",))
     test_instrumentation.assert_evaluations_and_reset([("child",)])
 
     fibre.run(first_child, ReturnArgument(2))

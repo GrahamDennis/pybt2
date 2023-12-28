@@ -57,7 +57,7 @@ def test_use_state(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentatio
     setter_1(increment)
     setter_1(increment)
 
-    use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
+    use_state_fibre_node = root_fibre_node.get_fibre_node(("use_state",))
     assert use_state_fibre_node.is_out_of_date()
 
     @run_in_fibre(fibre, root_fibre_node)
@@ -81,7 +81,7 @@ def test_setting_same_value_does_not_change_result_version(
     value_1, setter_1 = execute_1.result
     assert value_1 == 1
     test_instrumentation.assert_evaluations_and_reset([("use_state",)])
-    use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
+    use_state_fibre_node = root_fibre_node.get_fibre_node(("use_state",))
     use_state_fibre_node_state_1 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_1 is not None
     assert use_state_fibre_node_state_1.result_version == 1
@@ -92,7 +92,7 @@ def test_setting_same_value_does_not_change_result_version(
 
     test_instrumentation.assert_evaluations_and_reset([("use_state",)])
 
-    use_state_fibre_node = root_fibre_node.get_fibre_node(("root", "use_state"))
+    use_state_fibre_node = root_fibre_node.get_fibre_node(("use_state",))
     use_state_fibre_node_state_2 = use_state_fibre_node.get_fibre_node_state()
     assert use_state_fibre_node_state_2 is not None
     assert use_state_fibre_node_state_2.result_version == 1
@@ -186,7 +186,7 @@ class TestUseResource:
 
         assert execute.result == 1
 
-        use_resource_node = root_fibre_node.get_fibre_node(("root", "use_resource"))
+        use_resource_node = root_fibre_node.get_fibre_node(("use_resource",))
         assert (use_resource_node_state := use_resource_node.get_fibre_node_state()) is not None
         assert use_resource_node_state.state is None
 

@@ -19,8 +19,8 @@ class FibreInstrumentation(metaclass=ABCMeta):
 
 @frozen
 class NoOpFibreInstrumentation(FibreInstrumentation):
-    def on_node_evaluation_start(self, fibre_node: "FibreNode") -> None:
+    def on_node_evaluation_start(self, fibre_node: "FibreNode") -> None:  # pragma: no cover
         pass
 
-    def on_node_evaluation_end(self, fibre_node: "FibreNode") -> None:
+    def on_node_evaluation_end(self, fibre_node: "FibreNode") -> None:  # pragma: no cover
         pass

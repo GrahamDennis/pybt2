@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, ChainMap, Generic, Iterator, Optional, Sequence, Set, Type, cast
+from typing import Any, ChainMap, Generic, Iterable, Iterator, Optional, Sequence, Set, Type, cast
 
 from attr import Factory, field, mutable, setters
 
@@ -262,16 +262,17 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
                 child.dispose()
             self._fibre_node_state = None
 
-    def get_fibre_node(self, key_path: KeyPath) -> "FibreNode":
-        if key_path == self.key_path:
+    def get_fibre_node(self, relative_key_path: Iterable[Key]) -> "FibreNode":
+        key_path_iterator = iter(relative_key_path)
+        try:
+            child_key = next(key_path_iterator)
+            if self._fibre_node_state is not None:
+                for child in self._fibre_node_state.children:
+                    if child.key == child_key:
+                        return child.get_fibre_node(key_path_iterator)
+            raise KeyError(child_key)
+        except StopIteration:
             return self
-        current_key_path_length = len(self.key_path)
-        if key_path[:current_key_path_length] == self.key_path and self._fibre_node_state is not None:
-            child_key = key_path[current_key_path_length]
-            for child in self._fibre_node_state.children:
-                if child.key == child_key:
-                    return child.get_fibre_node(key_path)
-        raise KeyError(key_path)
 
     def on_tree_position_changed(self, schedule_on_fibre: "Fibre"):
         if self._tree_structure_successors:
