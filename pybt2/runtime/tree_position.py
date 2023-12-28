@@ -1,6 +1,7 @@
-from typing import Iterator, Optional, Self
+from typing import Iterator, Optional
 
 from attr import frozen
+from typing_extensions import Self
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeFunction, FibreNodeState
