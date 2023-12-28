@@ -104,10 +104,7 @@ class ContextProvider(FibreNodeFunction[ResultT, None, None], Generic[T, ResultT
             result=child_result.result,
             result_version=previous_state.result_version + 1 if previous_state is not None else 1,
             state=None,
-            children=(
-                context_value_node,
-                child_fibre_node,
-            ),
+            children=(context_value_node, child_fibre_node),
         )
 
 

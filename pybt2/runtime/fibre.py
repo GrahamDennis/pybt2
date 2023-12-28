@@ -238,8 +238,8 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
                 if next_tree_structure_predecessor not in previous_tree_structure_predecessors_set:
                     next_tree_structure_predecessor.add_tree_structure_successor(self)
 
+    @staticmethod
     def _on_children_changed(
-        self,
         fibre: "Fibre",
         *,
         previous_children: Sequence["FibreNode"],
