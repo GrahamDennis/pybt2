@@ -14,6 +14,15 @@ from tests.utils import ReturnArgument, run_in_fibre
 IntCaptureKey = CaptureKey[int]("TestCaptureKey")
 
 
+@frozen
+class CaptureChild(RuntimeCallableProps[None]):
+    captures: Sequence[tuple[str, int]]
+
+    def __call__(self, ctx: CallContext) -> None:
+        for capture_key, capture_value in self.captures:
+            use_capture(ctx, IntCaptureKey, capture_value, key=capture_key)
+
+
 @pytest.mark.known_keys("capture-root", "capture-child", "__CaptureRoot.Consumer")
 def test_can_empty_capture(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
@@ -37,14 +46,11 @@ def test_can_empty_capture(
 def test_can_capture_value(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
-    @frozen
-    class CaptureChild(RuntimeCallableProps[None]):
-        def __call__(self, ctx: CallContext) -> None:
-            use_capture(ctx, IntCaptureKey, 1, key="capture-leaf")
-
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
-        return ctx.evaluate_child(CaptureRoot(IntCaptureKey, CaptureChild(key="capture-child"), key="capture-root"))
+        return ctx.evaluate_child(
+            CaptureRoot(IntCaptureKey, CaptureChild([("capture-leaf", 1)], key="capture-child"), key="capture-root")
+        )
 
     capture_child_node = root_fibre_node.get_fibre_node(("capture-root", "capture-child"))
     capture_leaf_node = capture_child_node.get_fibre_node(("capture-leaf",))
@@ -63,14 +69,6 @@ def test_can_capture_value(
 def test_can_capture_values(
     fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
 ):
-    @frozen
-    class CaptureChild(RuntimeCallableProps[None]):
-        captures: Sequence[tuple[str, int]]
-
-        def __call__(self, ctx: CallContext) -> None:
-            for capture_key, capture_value in self.captures:
-                use_capture(ctx, IntCaptureKey, capture_value, key=capture_key)
-
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(

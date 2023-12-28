@@ -1,7 +1,7 @@
 from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Type, TypeVar, cast
 
 from attr import frozen
-from typing_extensions import Self
+from typing_extensions import Self, assert_never
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext
@@ -49,6 +49,8 @@ class CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEntr
                     captures[fibre_node] = value
                 case RemoveCaptureEntry(fibre_node):
                     del captures[fibre_node]
+                case _:  # pragma: no cover
+                    assert_never(update)
         return FibreNodeState(
             props=self,
             result=captures,
