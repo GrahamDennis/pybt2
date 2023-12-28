@@ -86,3 +86,8 @@ def test_cannot_remove_successor_that_does_not_exist(fibre: Fibre, root_fibre_no
 def test_cannot_remove_tree_structure_successor_that_does_not_exist(fibre: Fibre, root_fibre_node: FibreNode):
     with pytest.raises(KeyError):
         root_fibre_node.remove_tree_structure_successor(root_fibre_node)
+
+
+def test_cannot_get_child_node_that_doesnt_exist(root_fibre_node: FibreNode):
+    with pytest.raises(KeyError):
+        root_fibre_node.get_fibre_node("foo")

@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 
 import pytest
 from attr import frozen
@@ -106,6 +106,48 @@ def test_only_nodes_using_context_are_marked_out_of_date(
         ("context-provider", "intermediate") if not fibre.incremental else None,
         ("context-provider", "intermediate", "leaf"),
     )
+
+
+@pytest.mark.known_keys("context-provider", "leaf")
+def test_conditionally_fetch_context(
+    fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation
+):
+    @frozen
+    class Leaf(RuntimeCallableProps[Optional[int]]):
+        context_key: Optional[ContextKey[int]]
+
+        def __call__(self, ctx: CallContext) -> Optional[int]:
+            if self.context_key is not None:
+                return use_context(ctx, self.context_key)
+            else:
+                return None
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        ctx.evaluate_child(
+            ContextProvider(
+                key="context-provider",
+                context_key=IntContextKey,
+                value=1,
+                child=Leaf(context_key=IntContextKey, key="leaf"),
+            )
+        )
+
+    test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "leaf"))
+
+    # don't fetch context
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        ctx.evaluate_child(
+            ContextProvider(
+                key="context-provider",
+                context_key=IntContextKey,
+                value=1,
+                child=Leaf(context_key=None, key="leaf"),
+            )
+        )
+
+    test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "leaf"))
 
 
 def test_assert_context_has_value_will_fail_if_value_is_wrong(
