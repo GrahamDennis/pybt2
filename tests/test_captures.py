@@ -3,7 +3,7 @@ from typing import Sequence
 import pytest
 from attr import frozen
 
-from pybt2.runtime.captures import CaptureRoot, use_capture
+from pybt2.runtime.captures import CaptureRoot, OrderedCaptureRoot, use_capture
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
 from pybt2.runtime.hooks import use_state
@@ -175,3 +175,52 @@ def test_incremental_capture(
             ("capture-root", "capture-child", "capture-leaf"),
             ("capture-root", "__CaptureRoot.Consumer"),
         )
+
+
+@pytest.mark.known_keys("capture-root", "capture-child", "capture-1", "capture-2", "__CaptureRoot.Consumer")
+def test_ordered_capture(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext):
+        return ctx.evaluate_child(
+            OrderedCaptureRoot(
+                IntCaptureKey,
+                CaptureChild([("capture-1", 1), ("capture-2", 2)], key="capture-child"),
+                key="capture-root",
+            )
+        )
+
+    assert execute_1.result == [1, 2]
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("capture-root",),
+        ("capture-root", "capture-child"),
+        ("capture-root", "capture-child", "capture-1"),
+        ("capture-root", "capture-child", "capture-2"),
+        ("capture-root", "__CaptureRoot.Consumer"),
+        ("capture-root",),
+    )
+
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext):
+        return ctx.evaluate_child(
+            OrderedCaptureRoot(
+                IntCaptureKey,
+                CaptureChild([("capture-2", 2), ("capture-1", 1)], key="capture-child"),
+                key="capture-root",
+            )
+        )
+
+    assert execute_2.result == [2, 1]
+
+    test_instrumentation.assert_evaluations_and_reset(
+        ("capture-root",),
+        ("capture-root", "capture-child"),
+        *[
+            ("capture-root", "capture-child", "capture-2"),
+            ("capture-root", "capture-child", "capture-1"),
+            ("capture-root", "__CaptureRoot.Consumer"),
+        ]
+        if not fibre.incremental
+        else [],
+        ("capture-root",),
+    )

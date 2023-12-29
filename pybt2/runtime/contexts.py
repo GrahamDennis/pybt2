@@ -31,7 +31,7 @@ class ContextProvider(RuntimeCallableProps[ResultT], Generic[T, ResultT]):
 
     def __call__(self, ctx: CallContext) -> ResultT:
         ctx.evaluate_child(ContextValue(self.value, key=_context_value_key(self.context_key)))
-        (context_value_node,) = ctx.get_children()
+        context_value_node = ctx.get_last_child()
         context_map: dict[AbstractContextKey, FibreNode] = {self.context_key: context_value_node}
         return ctx.evaluate_child(self.child, additional_contexts=context_map)
 

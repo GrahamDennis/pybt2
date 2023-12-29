@@ -118,6 +118,9 @@ class CallContext:
         else:
             return tuple(self._current_children)
 
+    def get_last_child(self) -> FibreNode:
+        return self._current_children[-1]
+
     def get_fibre_node_for_context_key(self, context_key: AbstractContextKey) -> FibreNode:
         return self._fibre_node.contexts[context_key]
 

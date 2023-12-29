@@ -1,10 +1,12 @@
-from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Type, TypeVar, cast
+import itertools
+from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, Type, TypeVar, cast
 
-from attr import frozen
+from attr import Factory, frozen, mutable
 from typing_extensions import Self, assert_never
 
 from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext
+from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.tree_position import ReturnTreePosition, TreePosition
 from pybt2.runtime.types import (
     AbstractContextKey,
     CaptureKey,
@@ -17,6 +19,12 @@ T = TypeVar("T")
 
 DEFAULT_CAPTURE_CHILD_KEY = "__CaptureRoot.Child"
 CAPTURE_CONSUMER_KEY = "__CaptureRoot.Consumer"
+
+
+@frozen
+class InvalidRootTreePositionNodeError(Exception):
+    root_tree_position_node: FibreNode
+    capture_providers: Set[FibreNode]
 
 
 @frozen(weakref_slot=False)
@@ -102,6 +110,67 @@ class CaptureRoot(FibreNodeFunction[Mapping[FibreNode, T], None, None], Generic[
             state=None,
             children=(child_fibre_node, capture_consumer_node),
         )
+
+
+@mutable
+class TreePositionCalculator:
+    tree_position_root: FibreNode
+    capture_providers: Set[FibreNode]
+    return_tree_positions: dict[
+        FibreNode, tuple[FibreNode[ReturnTreePosition, TreePosition, None, None], TreePosition]
+    ] = Factory(dict)
+    key_slice_start: int = Factory(lambda self: len(self.tree_position_root.key_path) - 1, takes_self=True)
+
+    def get_tree_positions(self, ctx: CallContext) -> Mapping[TreePosition, FibreNode]:
+        results: dict[TreePosition, FibreNode] = {}
+
+        for capture_provider in self.capture_providers:
+            tree_position_node, tree_position = self.get_tree_position_node(ctx, capture_provider)
+            results[tree_position] = capture_provider
+
+        return results
+
+    def get_tree_position_node(
+        self, ctx: CallContext, fibre_node: FibreNode
+    ) -> tuple[FibreNode[ReturnTreePosition, TreePosition, None, None], TreePosition]:
+        if (result := self.return_tree_positions.get(fibre_node)) is not None:
+            return result
+
+        parent = fibre_node.parent
+        return_tree_position: ReturnTreePosition
+        parent_tree_position_node: Optional[FibreNode["ReturnTreePosition", TreePosition, None, None]]
+        if parent is self.tree_position_root:
+            parent_tree_position_node = None
+        elif parent is None:  # pragma: no cover
+            raise InvalidRootTreePositionNodeError(self.tree_position_root, self.capture_providers)
+        else:
+            parent_tree_position_node, _ = self.get_tree_position_node(ctx, parent)
+        return_tree_position = ReturnTreePosition(
+            fibre_node,
+            parent_tree_position_node,
+            key="/".join(str(key) for key in itertools.islice(fibre_node.key_path, self.key_slice_start, None)),
+        )
+        tree_position = ctx.evaluate_child(return_tree_position)
+        tree_position_node = cast(FibreNode[ReturnTreePosition, TreePosition, None, None], ctx.get_last_child())
+        self.return_tree_positions[fibre_node] = (tree_position_node, tree_position)
+
+        return tree_position_node, tree_position
+
+
+@frozen(weakref_slot=False)
+class OrderedCaptureRoot(RuntimeCallableProps[Sequence[T]], Generic[T]):
+    capture_key: CaptureKey[T]
+    child: FibreNodeFunction
+
+    def __call__(self, ctx: CallContext) -> Sequence[T]:
+        capture_results = ctx.evaluate_child(CaptureRoot[T](self.capture_key, self.child))
+        tree_position_root = ctx.get_last_child()
+
+        tree_positions = TreePositionCalculator(
+            tree_position_root, cast(Set[FibreNode], capture_results.keys())
+        ).get_tree_positions(ctx)
+
+        return [capture_results[fibre_node] for _, fibre_node in sorted(tree_positions.items())]
 
 
 @frozen(weakref_slot=False)
