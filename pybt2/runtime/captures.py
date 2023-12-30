@@ -66,17 +66,29 @@ class CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEntr
 
 
 @frozen(weakref_slot=False)
-class CaptureRoot(RuntimeCallableProps[Mapping[FibreNode, T]], Generic[T]):
+class CaptureRoot(FibreNodeFunction[Mapping[FibreNode, T], None, None], Generic[T]):
     capture_key: CaptureKey[T]
     child: FibreNodeFunction
 
-    def __call__(self, ctx: CallContext) -> Mapping[FibreNode, T]:
+    def run(
+        self,
+        ctx: CallContext,
+        previous_state: Optional[FibreNodeState[Self, Mapping[FibreNode, T], None]],
+        enqueued_updates: Iterator[None],
+    ) -> FibreNodeState[Self, Mapping[FibreNode, T], None]:
         capture_consumer_node = ctx.get_child_fibre_node(CaptureConsumer, CAPTURE_CONSUMER_KEY)
 
         ctx.evaluate_child(self.child, key=None, additional_contexts={self.capture_key: capture_consumer_node})
-        ctx.add_child(capture_consumer_node)
+        child_node = ctx.get_last_child()
+
         capture_consumer_result = ctx.fibre.run(capture_consumer_node, CaptureConsumer[T]())
-        return capture_consumer_result.result
+        return FibreNodeState(
+            props=self,
+            result=capture_consumer_result.result,
+            result_version=capture_consumer_result.result_version,
+            state=None,
+            children=(child_node, capture_consumer_node),
+        )
 
 
 @mutable
