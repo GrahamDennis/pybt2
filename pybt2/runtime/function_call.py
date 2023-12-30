@@ -8,12 +8,11 @@ from typing import (
     Optional,
     Sequence,
     Type,
-    TypeVar,
     cast,
     final,
 )
 
-from attr import Factory, mutable
+from attr import mutable
 from typing_extensions import Self
 
 from pybt2.runtime.exceptions import (
@@ -27,34 +26,38 @@ from pybt2.runtime.types import (
     FibreNodeFunction,
     FibreNodeState,
     Key,
+    PropsT,
     ResultT,
     StateT,
     UpdateT,
 )
 
-T = TypeVar("T")
-
-
-def auto_generated_child_key(child_idx: int) -> Key:
-    return child_idx
-
 
 @mutable(eq=False, weakref_slot=False)
 class CallContext:
-    _fibre: Fibre
-    _fibre_node: FibreNode
-    _previous_children: Sequence[FibreNode]
+    fibre: Fibre
+    fibre_node: FibreNode
+    _previous_state: Optional[FibreNodeState]
     _pointer: int = 0
-    _current_predecessors: MutableSequence[FibreNode] = Factory(list)
-    _current_children: MutableSequence[FibreNode] = Factory(list)
+    _current_predecessors: Optional[MutableSequence[FibreNode]] = None
+    _current_children: Optional[MutableSequence[FibreNode]] = None
+    _current_tree_structure_predecessors: Optional[MutableSequence[FibreNode]] = None
 
     def add_predecessor(self, fibre_node: FibreNode) -> None:
-        self._current_predecessors.append(fibre_node)
+        if self._current_predecessors is None:
+            self._current_predecessors = [fibre_node]
+        else:
+            self._current_predecessors.append(fibre_node)
 
     def add_child(self, fibre_node: FibreNode) -> None:
-        self._current_children.append(fibre_node)
+        if self._current_children is None:
+            self._current_children = [fibre_node]
+        else:
+            self._current_children.append(fibre_node)
 
     def _validate_child_key_is_unique(self, key: Key) -> None:
+        if self._current_children is None:
+            return
         for child in self._current_children:
             if child.key == key:
                 raise ChildAlreadyExistsError(key, existing_child=child)
@@ -63,12 +66,13 @@ class CallContext:
         if optional_key is not None:
             self._validate_child_key_is_unique(optional_key)
         self._pointer += 1
-        return optional_key if optional_key is not None else auto_generated_child_key(self._pointer)
+        return optional_key if optional_key is not None else self._pointer
 
     def _get_previous_child_with_key(self, key: Key) -> Optional[FibreNode]:
-        for child in self._previous_children:
-            if child.key == key:
-                return child
+        if self._previous_state is not None:
+            for child in self._previous_state.children:
+                if child.key == key:
+                    return child
         return None
 
     def _get_child_fibre_node(
@@ -84,13 +88,13 @@ class CallContext:
         else:
             return FibreNode(
                 key=child_key,
-                parent=self._fibre_node,
+                parent=self.fibre_node,
                 props_type=props_type,
-                contexts=self._fibre_node.contexts.new_child(
+                contexts=self.fibre_node.contexts.new_child(
                     cast(MutableMapping[AbstractContextKey, FibreNode], additional_contexts)
                 )
                 if additional_contexts is not None
-                else self._fibre_node.contexts,
+                else self.fibre_node.contexts,
             )
 
     def evaluate_child(
@@ -103,36 +107,59 @@ class CallContext:
             type(props), key=key if key is not None else props.key, additional_contexts=additional_contexts
         )
         self.add_child(child_fibre_node)
-        child_fibre_node_state = self._fibre.run(child_fibre_node, props)
+        child_fibre_node_state = self.fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
 
-    def get_predecessors(self) -> Sequence[FibreNode]:
-        if not self._current_predecessors:
+    def _get_current_predecessors(self) -> Sequence[FibreNode]:
+        if self._current_predecessors is None:
             return NO_PREDECESSORS
         else:
             return tuple(self._current_predecessors)
 
-    def get_children(self) -> Sequence[FibreNode]:
-        if not self._current_children:
+    def _get_current_children(self) -> Sequence[FibreNode]:
+        if self._current_children is None:
             return NO_CHILDREN
         else:
             return tuple(self._current_children)
 
+    def _get_current_tree_structure_predecessors(self) -> Sequence[FibreNode]:
+        if self._current_tree_structure_predecessors is None:
+            return NO_PREDECESSORS
+        else:
+            return tuple(self._current_tree_structure_predecessors)
+
     def get_last_child(self) -> FibreNode:
+        if self._current_children is None:
+            raise IndexError()
         return self._current_children[-1]
 
-    def get_fibre_node_for_context_key(self, context_key: AbstractContextKey) -> FibreNode:
-        return self._fibre_node.contexts[context_key]
+    def create_fibre_node_state(
+        self, props: PropsT, result: ResultT, state: StateT
+    ) -> FibreNodeState[PropsT, ResultT, StateT]:
+        next_result_version: int
+        if self._previous_state is not None:
+            next_result_version = (
+                self._previous_state.result_version
+                if result == self._previous_state.result
+                else self._previous_state.result_version + 1
+            )
+        else:
+            next_result_version = 1
+        return FibreNodeState(
+            props=props,
+            result=result,
+            result_version=next_result_version,
+            state=state,
+            predecessors=self._get_current_predecessors(),
+            children=self._get_current_children(),
+            tree_structure_predecessors=self._get_current_tree_structure_predecessors(),
+        )
 
 
 class RuntimeCallableProps(FibreNodeFunction[ResultT, None, None], Generic[ResultT], metaclass=ABCMeta):
     @abstractmethod
     def __call__(self, ctx: CallContext) -> ResultT:
         ...
-
-    @staticmethod
-    def are_results_eq(left: ResultT, right: ResultT) -> bool:
-        return left == right
 
     @final
     def run(
@@ -142,26 +169,8 @@ class RuntimeCallableProps(FibreNodeFunction[ResultT, None, None], Generic[Resul
         previous_state: Optional["FibreNodeState[Self, ResultT, None]"],
         enqueued_updates: Iterator[None],
     ) -> "FibreNodeState[Self, ResultT, None]":
-        ctx = CallContext(
-            fibre=fibre,
-            fibre_node=fibre_node,
-            previous_children=previous_state.children if previous_state is not None else NO_CHILDREN,
-        )
+        ctx = CallContext(fibre=fibre, fibre_node=fibre_node, previous_state=previous_state)
 
         result = self(ctx)
-        next_result_version: int
-        if previous_state is None:
-            next_result_version = 1
-        elif self.are_results_eq(result, previous_state.result):
-            next_result_version = previous_state.result_version
-        else:
-            next_result_version = previous_state.result_version + 1
 
-        return FibreNodeState(
-            props=self,
-            result=result,
-            result_version=next_result_version,
-            state=None,
-            predecessors=ctx.get_predecessors(),
-            children=ctx.get_children(),
-        )
+        return ctx.create_fibre_node_state(self, result, None)

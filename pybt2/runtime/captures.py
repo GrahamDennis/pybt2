@@ -219,6 +219,6 @@ class CaptureProvider(FibreNodeFunction[None, CaptureProviderState[T], None], Ge
 def use_capture(ctx: CallContext, capture_key: CaptureKey[T], value: T, key: Optional[Key] = None) -> None:
     capture_consumer_fibre_node = cast(
         FibreNode[CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]],
-        ctx.get_fibre_node_for_context_key(capture_key),
+        ctx.fibre_node.contexts[capture_key],
     )
     ctx.evaluate_child(CaptureProvider(capture_consumer_fibre_node, value), key=key)

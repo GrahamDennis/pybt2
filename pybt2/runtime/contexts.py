@@ -37,9 +37,7 @@ class ContextProvider(RuntimeCallableProps[ResultT], Generic[T, ResultT]):
 
 
 def use_context(ctx: CallContext, context_key: ContextKey[T]) -> T:
-    context_value_fibre_node = cast(
-        FibreNode[ContextValue[T], T, None, None], ctx.get_fibre_node_for_context_key(context_key)
-    )
+    context_value_fibre_node = cast(FibreNode[ContextValue[T], T, None, None], ctx.fibre_node.contexts[context_key])
     context_value_fibre_node_state = context_value_fibre_node.get_fibre_node_state()
     assert context_value_fibre_node_state is not None
     ctx.add_predecessor(context_value_fibre_node)
