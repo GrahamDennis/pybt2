@@ -83,10 +83,11 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
         previous_state: Optional[FibreNodeState[Self, T, UseResourceHookState]],
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, T, UseResourceHookState]:
-        if previous_state is not None and previous_state.props.dependencies == self.dependencies:
-            return previous_state
-        if previous_state is not None and previous_state.state is not None:
-            previous_state.state()
+        if previous_state is not None:
+            if previous_state.props.dependencies == self.dependencies:
+                return previous_state
+            else:
+                self.dispose(previous_state)
 
         result, dispose = self.construct_resource(self.resource_factory)
         result_version: int
@@ -122,6 +123,7 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
         return value, cleanup
 
     @classmethod
+    @override
     def dispose(cls, state: FibreNodeState[Self, T, UseResourceHookState]) -> None:
         if state.state is not None:
             state.state()

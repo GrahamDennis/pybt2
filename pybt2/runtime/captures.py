@@ -2,7 +2,7 @@ import itertools
 from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, Type, TypeVar, cast
 
 from attr import Factory, frozen, mutable
-from typing_extensions import Self, assert_never
+from typing_extensions import Self, assert_never, override
 
 from pybt2.runtime.fibre import Fibre, FibreNode
 from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
@@ -93,6 +93,7 @@ class CaptureRoot(FibreNodeFunction[Mapping[FibreNode, T], None, None], Generic[
             )
 
             context_map: dict[AbstractContextKey, FibreNode] = {self.capture_key: capture_consumer_node}
+            # FIXME: if the child key changes, we don't destroy this fibre node
             child_fibre_node = FibreNode.create(
                 key=self.child.key if self.child.key is not None else DEFAULT_CAPTURE_CHILD_KEY,
                 parent=fibre_node,
@@ -207,6 +208,7 @@ class CaptureProvider(FibreNodeFunction[None, CaptureProviderState[T], None], Ge
         )
 
     @classmethod
+    @override
     def dispose(cls, state: FibreNodeState[Self, None, CaptureProviderState[T]]) -> None:
         capture_provider_state = state.state
         capture_provider_state.capture_consumer_fibre_node.enqueue_update(

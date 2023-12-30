@@ -14,8 +14,12 @@ branch = true
 
 [tool.coverage.report]
 exclude_also = [
+    # don't complain about conditional type checking imports
     "if TYPE_CHECKING:",
+    # Don't complain about abstract methods, they aren't run:
     "@(abc\\.)?abstractmethod",
+    # Don't complain about assert_never calls, as they aren't run:
+    "assert_never\\(",
 ]
 
 show_missing = true
