@@ -21,11 +21,5 @@ class PropsTypeConflictError(Exception, Generic[PropsT]):
 
 
 @frozen
-class PropTypesNotIdenticalError(Exception):
-    props_type: type
-    runtime_callable_props_type: type
-
-
-@frozen
 class ExpectedRuntimeCallablePropsType(Exception):
     props_type: type

@@ -1,16 +1,30 @@
+import itertools
 from collections import deque
-from typing import Any, ChainMap, Generic, Iterable, Iterator, Optional, Sequence, Set, Type, cast
+from typing import (
+    Any,
+    ChainMap,
+    Generic,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    cast,
+)
 
-from attr import Factory, field, mutable, setters
+from attr import Factory, field, frozen, mutable, setters
 
 from pybt2.runtime import static_configuration
-from pybt2.runtime.exceptions import PropsTypeConflictError, PropTypesNotIdenticalError
+from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError
 from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrumentation
 from pybt2.runtime.types import (
     NO_CHILDREN,
     NO_PREDECESSORS,
     AbstractContextKey,
-    FibreNodeExecutionToken,
     FibreNodeFunction,
     FibreNodeState,
     Key,
@@ -39,6 +53,138 @@ def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[AbstractContextKey
     return _get_contexts(fibre_node.parent)
 
 
+@frozen(weakref_slot=False)
+class FibreNodeExecutionToken(Generic[UpdateT]):
+    dependencies_version: int
+    _enqueued_updates: Optional[list[UpdateT]]
+    enqueued_updates_stop: int
+
+    def get_enqueued_updates(self) -> Iterator[UpdateT]:
+        if self._enqueued_updates is None:
+            return _EMPTY_ITERATOR
+        else:
+            return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
+
+
+@mutable(eq=False, weakref_slot=False)
+class CallContext:
+    fibre: "Fibre"
+    fibre_node: "FibreNode"
+    _previous_state: Optional["FibreNodeState"]
+    _pointer: int = 0
+    _current_predecessors: Optional[MutableSequence["FibreNode"]] = None
+    _current_children: Optional[MutableSequence["FibreNode"]] = None
+
+    def add_predecessor(self, fibre_node: "FibreNode") -> None:
+        if self._current_predecessors is None:
+            self._current_predecessors = [fibre_node]
+        else:
+            self._current_predecessors.append(fibre_node)
+
+    def add_child(self, fibre_node: "FibreNode") -> None:
+        if self._current_children is None:
+            self._current_children = [fibre_node]
+        else:
+            self._current_children.append(fibre_node)
+
+    def _validate_child_key_is_unique(self, key: Key) -> None:
+        if self._current_children is None:
+            return
+        for child in self._current_children:
+            if child.key == key:
+                raise ChildAlreadyExistsError(key, existing_child=child)
+
+    def _next_child_key(self, optional_key: Optional[Key]) -> Key:
+        if optional_key is not None:
+            self._validate_child_key_is_unique(optional_key)
+        self._pointer += 1
+        return optional_key if optional_key is not None else self._pointer
+
+    def _get_previous_child_with_key(self, key: Key) -> Optional["FibreNode"]:
+        if self._previous_state is not None:
+            for child in self._previous_state.children:
+                if child.key == key:
+                    return child
+        return None
+
+    def get_child_fibre_node(
+        self,
+        props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+    ) -> "FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]":
+        child_key = self._next_child_key(key)
+        previous_child_fibre_node: Optional[FibreNode] = self._get_previous_child_with_key(child_key)
+        if previous_child_fibre_node is not None and previous_child_fibre_node.props_type is props_type:
+            if additional_contexts is not None:
+                # In case the context has changed from the previous iteration
+                previous_child_fibre_node.contexts.clear()
+                previous_child_fibre_node.contexts.update(additional_contexts)
+            return previous_child_fibre_node
+        else:
+            return FibreNode(
+                key=child_key,
+                parent=self.fibre_node,
+                props_type=props_type,
+                contexts=self.fibre_node.contexts.new_child(
+                    cast(MutableMapping[AbstractContextKey, FibreNode], additional_contexts)
+                )
+                if additional_contexts is not None
+                else self.fibre_node.contexts,
+            )
+
+    def evaluate_child(
+        self,
+        props: FibreNodeFunction[ResultT, StateT, UpdateT],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+    ) -> ResultT:
+        child_fibre_node = self.get_child_fibre_node(
+            type(props), key=key if key is not None else props.key, additional_contexts=additional_contexts
+        )
+        self.add_child(child_fibre_node)
+        child_fibre_node_state = self.fibre.run(child_fibre_node, props)
+        return child_fibre_node_state.result
+
+    def _get_current_predecessors(self) -> Sequence["FibreNode"]:
+        if self._current_predecessors is None:
+            return NO_PREDECESSORS
+        else:
+            return tuple(self._current_predecessors)
+
+    def _get_current_children(self) -> Sequence["FibreNode"]:
+        if self._current_children is None:
+            return NO_CHILDREN
+        else:
+            return tuple(self._current_children)
+
+    def get_last_child(self) -> "FibreNode":
+        if self._current_children is None:
+            raise IndexError()
+        return self._current_children[-1]
+
+    def create_fibre_node_state(
+        self, props: PropsT, result: ResultT, state: StateT
+    ) -> FibreNodeState[PropsT, ResultT, StateT]:
+        next_result_version: int
+        if self._previous_state is not None:
+            next_result_version = (
+                self._previous_state.result_version
+                if result == self._previous_state.result
+                else self._previous_state.result_version + 1
+            )
+        else:
+            next_result_version = 1
+        return FibreNodeState(
+            props=props,
+            result=result,
+            result_version=next_result_version,
+            state=state,
+            predecessors=self._get_current_predecessors(),
+            children=self._get_current_children(),
+        )
+
+
 @mutable(eq=False, weakref_slot=static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # I'd really like to be able to say that PropsT is bound by FibreNodeFunction[ResultT, StateT, UpdateT], but that's
@@ -62,23 +208,6 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # much of a difference
     _successors: Optional[Set["FibreNode"]] = None
     _tree_structure_successors: Optional[list["FibreNode"]] = None
-
-    @staticmethod
-    def create(
-        key: Key,
-        parent: Optional["FibreNode"],
-        props_type: Type[PropsT],
-        fibre_node_function_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
-        contexts: Optional[ChainMap[AbstractContextKey, "FibreNode"]] = None,
-    ) -> "FibreNode[PropsT, ResultT, StateT, UpdateT]":
-        if props_type is not fibre_node_function_type:
-            raise PropTypesNotIdenticalError(props_type, fibre_node_function_type)
-        return FibreNode(
-            key=key,
-            parent=parent,
-            props_type=fibre_node_function_type,
-            contexts=contexts if contexts is not None else _get_contexts(parent),
-        )
 
     def add_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:
@@ -157,10 +286,9 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             return cast(FibreNodeState[PropsT, ResultT, StateT], previous_fibre_node_state)
 
         fibre.instrumentation.on_node_evaluation_start(self)
+        ctx = CallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
         next_fibre_node_state = cast(FibreNodeFunction[ResultT, StateT, UpdateT], props).run(
-            # FIXME: We could pass in the execution token here
-            fibre=fibre,
-            fibre_node=cast(FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT], self),
+            ctx,
             previous_state=previous_fibre_node_state,
             enqueued_updates=execution_token.get_enqueued_updates(),
         )

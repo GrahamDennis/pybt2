@@ -2,8 +2,8 @@ from typing import Any, Generic, TypeVar, cast
 
 from attr import frozen
 
-from pybt2.runtime.fibre import FibreNode
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext, FibreNode
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.types import AbstractContextKey, ContextKey, FibreNodeFunction, ResultT
 
 T = TypeVar("T")

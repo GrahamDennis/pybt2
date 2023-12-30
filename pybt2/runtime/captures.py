@@ -1,14 +1,13 @@
 import itertools
-from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, Type, TypeVar, cast
+from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, TypeVar, cast
 
 from attr import Factory, frozen, mutable
 from typing_extensions import Self, assert_never, override
 
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.tree_position import ReturnTreePosition, TreePosition
 from pybt2.runtime.types import (
-    AbstractContextKey,
     CaptureKey,
     FibreNodeFunction,
     FibreNodeState,
@@ -45,8 +44,7 @@ CaptureEntryAction = AddCaptureEntry[T] | RemoveCaptureEntry
 class CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEntryAction[T]]):
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, Mapping[FibreNode, T], None, CaptureEntryAction[T]],
+        ctx: CallContext,
         previous_state: Optional[FibreNodeState[Self, Mapping[FibreNode, T], None]],
         enqueued_updates: Iterator[CaptureEntryAction[T]],
     ) -> FibreNodeState[Self, Mapping[FibreNode, T], None]:
@@ -68,49 +66,17 @@ class CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEntr
 
 
 @frozen(weakref_slot=False)
-class CaptureRoot(FibreNodeFunction[Mapping[FibreNode, T], None, None], Generic[T]):
+class CaptureRoot(RuntimeCallableProps[Mapping[FibreNode, T]], Generic[T]):
     capture_key: CaptureKey[T]
     child: FibreNodeFunction
 
-    def run(
-        self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, Mapping[FibreNode, T], None, None],
-        previous_state: Optional[FibreNodeState[Self, Mapping[FibreNode, T], None]],
-        enqueued_updates: Iterator[None],
-    ) -> FibreNodeState[Self, Mapping[FibreNode, T], None]:
-        child_fibre_node: FibreNode
-        capture_consumer_node: FibreNode[CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]]
+    def __call__(self, ctx: CallContext) -> Mapping[FibreNode, T]:
+        capture_consumer_node = ctx.get_child_fibre_node(CaptureConsumer, CAPTURE_CONSUMER_KEY)
 
-        if previous_state is not None:
-            child_fibre_node, capture_consumer_node = previous_state.children
-        else:
-            capture_consumer_node = FibreNode.create(
-                key=CAPTURE_CONSUMER_KEY,
-                parent=fibre_node,
-                props_type=CaptureConsumer,
-                fibre_node_function_type=CaptureConsumer,
-            )
-
-            context_map: dict[AbstractContextKey, FibreNode] = {self.capture_key: capture_consumer_node}
-            # FIXME: if the child key changes, we don't destroy this fibre node
-            child_fibre_node = FibreNode.create(
-                key=self.child.key if self.child.key is not None else DEFAULT_CAPTURE_CHILD_KEY,
-                parent=fibre_node,
-                props_type=type(self.child),
-                fibre_node_function_type=cast(Type[FibreNodeFunction], type(self.child)),
-                contexts=fibre_node.contexts.new_child(context_map),
-            )
-
-        fibre.run(child_fibre_node, self.child)
-        capture_consumer_result = fibre.run(capture_consumer_node, CaptureConsumer[T]())
-        return FibreNodeState(
-            props=self,
-            result=capture_consumer_result.result,
-            result_version=capture_consumer_result.result_version,
-            state=None,
-            children=(child_fibre_node, capture_consumer_node),
-        )
+        ctx.evaluate_child(self.child, key=None, additional_contexts={self.capture_key: capture_consumer_node})
+        ctx.add_child(capture_consumer_node)
+        capture_consumer_result = ctx.fibre.run(capture_consumer_node, CaptureConsumer[T]())
+        return capture_consumer_result.result
 
 
 @mutable
@@ -188,22 +154,21 @@ class CaptureProvider(FibreNodeFunction[None, CaptureProviderState[T], None], Ge
 
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, None, CaptureProviderState[T], None],
+        ctx: CallContext,
         previous_state: Optional[FibreNodeState[Self, None, CaptureProviderState[T]]],
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, None, CaptureProviderState[T]]:
         if previous_state is None or previous_state.props.value != self.value:
-            self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(fibre_node, self.value), fibre)
+            self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(ctx.fibre_node, self.value), ctx.fibre)
 
         return FibreNodeState(
             props=self,
             result=None,
             result_version=1,
             state=CaptureProviderState(
-                capture_provider_fibre_node=fibre_node,
+                capture_provider_fibre_node=ctx.fibre_node,
                 capture_consumer_fibre_node=self.capture_consumer_fibre_node,
-                fibre=fibre,
+                fibre=ctx.fibre,
             ),
         )
 

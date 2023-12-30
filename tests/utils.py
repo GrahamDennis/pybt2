@@ -2,8 +2,8 @@ from typing import Any, Callable, Sequence
 
 from attr import frozen
 
-from pybt2.runtime.fibre import Fibre, FibreNode, FibreNodeState
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode, FibreNodeState
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.types import FibreNodeFunction, ResultT, StateT, UpdateT
 
 ExternalFunction = Callable[[CallContext], ResultT]

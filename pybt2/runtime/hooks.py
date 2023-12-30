@@ -4,8 +4,8 @@ from typing import Awaitable, Callable, Generic, Iterator, Optional, ParamSpec, 
 from attr import field, frozen
 from typing_extensions import Self, override
 
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.types import (
     Dependencies,
     FibreNodeFunction,
@@ -29,14 +29,12 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
     @override
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, UseStateResult[T], None, Reducer[T]],
+        ctx: CallContext,
         previous_state: Optional[FibreNodeState[Self, UseStateResult[T], None]],
         enqueued_updates: Iterator[Reducer[T]],
     ) -> FibreNodeState[Self, UseStateResult[T], None]:
         value: T
         setter: Setter[T]
-        result_version: int
 
         if previous_state is not None:
             previous_value, previous_setter = previous_state.result
@@ -46,20 +44,17 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
                 value = cast(Callable[[T], T], update)(value) if callable(update) else cast(T, update)
             if value == previous_value:
                 return previous_state
-            result_version = previous_state.result_version + 1
         else:
             value = self.value
+
+            # ensure we don't capture "ctx" in the 'setter' closure
+            fibre_node = ctx.fibre_node
+            fibre = ctx.fibre
 
             def setter(reducer: Reducer[T]) -> None:
                 fibre_node.enqueue_update(reducer, fibre)
 
-            result_version = 1
-        return FibreNodeState(
-            props=self,
-            result=(value, setter),
-            result_version=result_version,
-            state=None,
-        )
+        return ctx.create_fibre_node_state(props=self, result=(value, setter), state=None)
 
 
 def use_state(ctx: CallContext, value: T, key: Optional[Key] = None) -> Tuple[T, Setter[T]]:
@@ -78,8 +73,7 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
     @override
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, T, UseResourceHookState, None],
+        ctx: CallContext,
         previous_state: Optional[FibreNodeState[Self, T, UseResourceHookState]],
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, T, UseResourceHookState]:
@@ -90,19 +84,8 @@ class UseResourceHook(FibreNodeFunction[T, UseResourceHookState, None], Generic[
                 self.dispose(previous_state)
 
         result, dispose = self.construct_resource(self.resource_factory)
-        result_version: int
-        if previous_state is None:
-            result_version = 1
-        else:
-            previous_result_version = previous_state.result_version
-            result_version = previous_result_version if result == previous_state.result else previous_result_version + 1
 
-        return FibreNodeState(
-            props=self,
-            result=result,
-            result_version=result_version,
-            state=dispose,
-        )
+        return ctx.create_fibre_node_state(self, result, dispose)
 
     @staticmethod
     def construct_resource(resource_factory: UseResourceHookResourceFactory[T]) -> tuple[T, Optional[Task]]:

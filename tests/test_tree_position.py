@@ -2,8 +2,7 @@ from typing import Any
 
 import pytest
 
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
 from pybt2.runtime.tree_position import CannotFindTreePositionOfRootNode, InvalidFibreNodeDependency, ReturnTreePosition
 from tests.instrumentation import CallRecordingInstrumentation
 from tests.utils import EvaluateChildren, ReturnArgument, run_in_fibre

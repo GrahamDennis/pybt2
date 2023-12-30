@@ -1,12 +1,21 @@
-import itertools
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, Optional, Sequence, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generic,
+    Iterator,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+)
 
 from attr import field, frozen
 from typing_extensions import Self
 
 if TYPE_CHECKING:
-    from pybt2.runtime.fibre import Fibre, FibreNode
+    from pybt2.runtime.fibre import CallContext, FibreNode
 
 Key = str | int
 KeyPath = tuple[Key, ...]
@@ -28,27 +37,13 @@ _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
 @frozen(weakref_slot=False)
-class FibreNodeExecutionToken(Generic[UpdateT]):
-    dependencies_version: int
-    _enqueued_updates: Optional[list[UpdateT]]
-    enqueued_updates_stop: int
-
-    def get_enqueued_updates(self) -> Iterator[UpdateT]:
-        if self._enqueued_updates is None:
-            return _EMPTY_ITERATOR
-        else:
-            return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
-
-
-@frozen(weakref_slot=False)
 class FibreNodeFunction(Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta):
     key: Optional[Key] = field(default=None, kw_only=True)
 
     @abstractmethod
     def run(
         self,
-        fibre: "Fibre",
-        fibre_node: "FibreNode[Self, ResultT, StateT, UpdateT]",
+        ctx: "CallContext",
         previous_state: Optional["FibreNodeState[Self, ResultT, StateT]"],
         enqueued_updates: Iterator[UpdateT],
     ) -> "FibreNodeState[Self, ResultT, StateT]":

@@ -4,8 +4,7 @@ from typing import Callable, TypeVar
 
 import pytest
 
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
 from pybt2.runtime.hooks import (
     AsyncCancelled,
     AsyncFailure,

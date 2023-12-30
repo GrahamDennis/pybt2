@@ -4,8 +4,8 @@ import pytest
 from attr import frozen
 
 from pybt2.runtime.captures import CaptureRoot, OrderedCaptureRoot, use_capture
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.hooks import use_state
 from pybt2.runtime.types import CaptureKey
 from tests.instrumentation import CallRecordingInstrumentation

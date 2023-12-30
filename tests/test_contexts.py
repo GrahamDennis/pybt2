@@ -4,8 +4,8 @@ import pytest
 from attr import frozen
 
 from pybt2.runtime.contexts import ContextProvider, use_context
-from pybt2.runtime.fibre import Fibre, FibreNode
-from pybt2.runtime.function_call import CallContext, RuntimeCallableProps
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
+from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.types import ContextKey
 
 from .instrumentation import CallRecordingInstrumentation

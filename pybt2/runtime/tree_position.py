@@ -3,7 +3,7 @@ from typing import Iterator, Optional
 from attr import frozen
 from typing_extensions import Self
 
-from pybt2.runtime.fibre import Fibre, FibreNode
+from pybt2.runtime.fibre import CallContext, FibreNode
 from pybt2.runtime.types import NO_PREDECESSORS, FibreNodeFunction, FibreNodeState
 
 TreePosition = tuple[int, ...]
@@ -26,8 +26,7 @@ class ReturnTreePosition(FibreNodeFunction[TreePosition, None, None]):
 
     def run(
         self,
-        fibre: Fibre,
-        fibre_node: FibreNode[Self, TreePosition, None, None],
+        ctx: CallContext,
         previous_state: Optional[FibreNodeState[Self, TreePosition, None]],
         enqueued_updates: Iterator[None],
     ) -> FibreNodeState[Self, TreePosition, None]:
@@ -37,7 +36,7 @@ class ReturnTreePosition(FibreNodeFunction[TreePosition, None, None]):
 
         parent_fibre_node_state = parent.get_fibre_node_state()
         if parent_fibre_node_state is None:
-            raise InvalidFibreNodeDependency(fibre_node)
+            raise InvalidFibreNodeDependency(ctx.fibre_node)
 
         index_in_parent = parent_fibre_node_state.children.index(self.position_for_fibre_node)
         tree_position: TreePosition
