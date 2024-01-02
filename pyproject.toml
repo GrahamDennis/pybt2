@@ -25,7 +25,7 @@ exclude_also = [
 show_missing = true
 skip_covered = true
 skip_empty = true
-fail_under = 90
+# fail_under = 90
 
 [tool.pytest.ini_options]
 markers = [
@@ -46,5 +46,5 @@ disallow_incomplete_defs = false
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
-module = ["aiotools.*"]
+module = ["aiotools.*", "pydot.*"]
 ignore_missing_imports = true

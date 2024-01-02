@@ -173,7 +173,7 @@ _ASYNC_CANCELLED = AsyncCancelled()
 class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
     awaitable_factory: Callable[[], Awaitable[T]] = field(eq=False)
     dependencies: Dependencies
-    loop: Optional[asyncio.AbstractEventLoop] = field(eq=False, default=None)
+    loop: Optional[asyncio.AbstractEventLoop] = field(eq=False, default=None, repr=False)
 
     def __call__(self, ctx: CallContext) -> AsyncResult[T]:
         async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key="result")

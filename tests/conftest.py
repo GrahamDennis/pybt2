@@ -1,7 +1,7 @@
 import asyncio
 import gc
 import weakref
-from typing import Any, AsyncIterator, Collection, Iterator
+from typing import Any, AsyncIterator, Callable, Collection, Iterator, Type, cast
 
 import pytest
 import pytest_asyncio
@@ -15,8 +15,8 @@ static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT = True
 # This is necessary to get pretty assertion failure messages from the test instrumentation module
 pytest.register_assert_rewrite("tests.instrumentation")
 
-from pybt2.runtime.fibre import Fibre, FibreNode  # noqa: E402
-from pybt2.runtime.types import Key  # noqa: E402
+from pybt2.runtime.fibre import CallContext, Fibre, FibreNode  # noqa: E402
+from pybt2.runtime.types import FibreNodeFunction, Key, ResultT  # noqa: E402
 
 from .instrumentation import CallRecordingInstrumentation  # noqa: E402
 from .utils import ExternalFunctionProps  # noqa: E402
@@ -49,13 +49,23 @@ def _get_child_node_refs(fibre_node: FibreNode) -> Iterator[weakref.ReferenceTyp
 
 
 @pytest.fixture()
-def root_fibre_node(fibre: Fibre) -> Iterator[FibreNode]:
-    root_fibre_node: FibreNode = FibreNode(key="root", parent=None, props_type=ExternalFunctionProps)
+def root_fibre_node_props_type() -> Type[FibreNodeFunction]:
+    return ExternalFunctionProps
+
+
+@pytest.fixture()
+def root_fibre_node(fibre: Fibre, root_fibre_node_props_type: Type[FibreNodeFunction]) -> Iterator[FibreNode]:
+    root_fibre_node: FibreNode = FibreNode(key="root", parent=None, props_type=root_fibre_node_props_type)
     yield root_fibre_node
 
     node_refs = list(_get_child_node_refs(root_fibre_node))
 
-    fibre.run(root_fibre_node, ExternalFunctionProps(lambda _ctx: None))
+    fibre.run(
+        root_fibre_node,
+        cast(Callable[[Callable[[CallContext], ResultT]], FibreNodeFunction], root_fibre_node_props_type)(
+            lambda _ctx: None
+        ),
+    )
     fibre.drain_work_queue()
 
     references: dict[FibreNode, Any] = {}

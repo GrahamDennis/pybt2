@@ -1,6 +1,6 @@
 from typing import Iterator, Optional
 
-from attr import frozen
+from attr import field, frozen
 from typing_extensions import Self
 
 from pybt2.runtime.fibre import CallContext, FibreNode
@@ -21,8 +21,10 @@ class InvalidFibreNodeDependency(Exception):
 
 @frozen
 class ReturnTreePosition(FibreNodeFunction[TreePosition, None, None]):
-    position_for_fibre_node: FibreNode
-    parent_tree_position_fibre_node: Optional[FibreNode["ReturnTreePosition", TreePosition, None, None]]
+    position_for_fibre_node: FibreNode = field(repr=lambda node: str(node.key_path))
+    parent_tree_position_fibre_node: Optional[FibreNode["ReturnTreePosition", TreePosition, None, None]] = field(
+        repr=lambda optional_node: str(optional_node.key_path) if optional_node is not None else str(None)
+    )
 
     def run(
         self,

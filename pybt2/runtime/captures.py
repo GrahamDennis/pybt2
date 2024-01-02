@@ -1,7 +1,7 @@
 import itertools
 from typing import Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, TypeVar, cast
 
-from attr import Factory, frozen, mutable
+from attr import Factory, field, frozen, mutable
 from typing_extensions import Self, assert_never, override
 
 from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
@@ -161,7 +161,9 @@ class CaptureProviderState(Generic[T]):
 
 @frozen(weakref_slot=False)
 class CaptureProvider(FibreNodeFunction[None, CaptureProviderState[T], None], Generic[T]):
-    capture_consumer_fibre_node: FibreNode[CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]]
+    capture_consumer_fibre_node: FibreNode[CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]] = field(
+        repr=lambda node: str(node.key_path)
+    )
     value: T
 
     def run(
