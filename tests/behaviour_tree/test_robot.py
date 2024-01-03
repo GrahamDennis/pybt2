@@ -1,3 +1,5 @@
+import logging
+import tempfile
 from typing import Callable
 
 import pytest
@@ -11,6 +13,8 @@ from pybt2.runtime.visualise import DotRenderer
 from tests.behaviour_tree.robot import GuaranteePowerSupply, MoveTowards, Robot, RobotSimulator, RobotState, SafeRobot
 from tests.instrumentation import CallRecordingInstrumentation
 from tests.utils import run_in_fibre
+
+logger = logging.getLogger(__name__)
 
 RobotFactory = Callable[[RobotState], Robot]
 
@@ -70,4 +74,6 @@ class TestRobotVisualisation:
 
         graph = DotRenderer(root_fibre_node).to_dot()
 
-        graph.write("/tmp/robot_visualisation.png", format="png")
+        with tempfile.NamedTemporaryFile(prefix="visualise_robot", suffix=".png", delete=False) as f:
+            f.write(graph.create(format="png"))
+            logger.info("Created image at %s", f.name)

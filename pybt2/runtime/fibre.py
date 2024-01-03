@@ -11,7 +11,6 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
-    Set,
     Type,
     cast,
 )
@@ -194,7 +193,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # I'd really like to be able to say that PropsT is bound by FibreNodeFunction[ResultT, StateT, UpdateT], but that's
     # not possible. That causes some unfortunate casts to be required throughout.
     key: Key = field(on_setattr=setters.frozen)
-    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen, repr=False)
     props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]] = field(on_setattr=setters.frozen)
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
@@ -210,14 +209,14 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     _enqueued_updates: Optional[list[UpdateT]] = None
     # Should this just be a list? There's a small number of nodes that have this field, so it probably doesn't make
     # much of a difference
-    _successors: Optional[Set["FibreNode"]] = None
+    _successors: Optional[list["FibreNode"]] = None
     _tree_structure_successors: Optional[list["FibreNode"]] = None
 
     def add_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:
-            self._successors = {successor_fibre_node}
+            self._successors = [successor_fibre_node]
         else:
-            self._successors.add(successor_fibre_node)
+            self._successors.append(successor_fibre_node)
 
     def remove_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:
