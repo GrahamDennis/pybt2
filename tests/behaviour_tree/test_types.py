@@ -38,7 +38,7 @@ def test_is_running():
     ("node_return", "expected"), [(True, Success()), (False, Failure())], ids=["return=True", "return=False"]
 )
 def test_can_return_bool(node_return: bool, expected: Result, fibre: Fibre, bt_root_fibre_node: FibreNode):
-    @run_in_fibre(fibre, bt_root_fibre_node, False)
+    @run_in_fibre(fibre, bt_root_fibre_node)
     def execute(_ctx: CallContext) -> BTNodeResult:
         return node_return
 
@@ -51,7 +51,7 @@ def test_can_return_bool(node_return: bool, expected: Result, fibre: Fibre, bt_r
     ids=["AlwaysSuccess", "AlwaysFailure", "AlwaysRunning"],
 )
 def test_can_return_node(node_return: BTNode, expected: Result, fibre: Fibre, bt_root_fibre_node: FibreNode):
-    @run_in_fibre(fibre, bt_root_fibre_node, False)
+    @run_in_fibre(fibre, bt_root_fibre_node)
     def execute(_ctx: CallContext) -> BTNodeResult:
         return node_return
 

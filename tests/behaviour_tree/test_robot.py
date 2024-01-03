@@ -1,3 +1,6 @@
+from typing import Callable
+
+import pytest
 from attr import field, frozen, mutable
 
 from pybt2.behaviour_tree.nodes import AlwaysRunning
@@ -24,8 +27,8 @@ def _normalise_position(position: float) -> float:
 
 @frozen
 class RobotState:
-    battery_level: float = field(converter=_normalise_battery_level)
-    position: float = field(converter=_normalise_position)
+    battery_level: float = field(converter=_normalise_battery_level, kw_only=True)
+    position: float = field(converter=_normalise_position, kw_only=True)
 
 
 def _normalise_velocity(velocity: float) -> float:
@@ -42,15 +45,6 @@ def next_robot_state(robot_state: RobotState, demands: RobotDemands) -> RobotSta
         battery_level=robot_state.battery_level + 1 if robot_state.position < 0.1 else robot_state.battery_level - 0.1,
         position=robot_state.position + demands.velocity,
     )
-
-
-@mutable
-class Robot:
-    state: RobotState
-
-    async def next_robot_state(self, demands: RobotDemands) -> RobotState:
-        self.state = next_robot_state(self.state, demands)
-        return self.state
 
 
 BatteryLevelContextKey = ContextKey[float]("BatteryLevelContext")
@@ -98,9 +92,32 @@ class RobotSimulator(RuntimeCallableProps[tuple[Result, RobotDemands]]):
         )
 
 
-def test_tick_always_running_robot(fibre: Fibre, root_fibre_node: FibreNode):
-    @run_in_fibre(fibre, root_fibre_node, False)
-    def execute(ctx: CallContext):
-        return ctx.evaluate_inline(RobotSimulator(RobotState(100, 50), AlwaysRunning()))
+@mutable
+class Robot:
+    robot_state: RobotState
+    _fibre: Fibre
+    _root_fibre_node: FibreNode
 
-    assert execute.result == (Running(), RobotDemands(0.0))
+    def tick(self, tree: BTNode) -> tuple[Result, RobotState]:
+        @run_in_fibre(self._fibre, self._root_fibre_node)
+        def execute(ctx: CallContext) -> tuple[Result, RobotDemands]:
+            return ctx.evaluate_inline(RobotSimulator(self.robot_state, tree))
+
+        result, robot_demands = execute.result
+
+        self.robot_state = next_robot_state(self.robot_state, robot_demands)
+        return (result, self.robot_state)
+
+
+RobotFactory = Callable[[RobotState], Robot]
+
+
+@pytest.fixture()
+def create_robot_ticker(fibre: Fibre, root_fibre_node: FibreNode) -> RobotFactory:
+    return lambda initial_robot_state: Robot(initial_robot_state, fibre, root_fibre_node)
+
+
+def test_tick_always_running_robot(create_robot_ticker: RobotFactory):
+    robot = create_robot_ticker(RobotState(battery_level=100, position=50))
+
+    assert robot.tick(AlwaysRunning()) == (Running(), RobotState(battery_level=99.9, position=50))
