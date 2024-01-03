@@ -146,6 +146,10 @@ class CallContext:
         child_fibre_node_state = self.fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
 
+    def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
+        child_fibre_node_state = props.run(self, None, _EMPTY_ITERATOR)
+        return child_fibre_node_state.result
+
     def _get_current_predecessors(self) -> Sequence["FibreNode"]:
         if self._current_predecessors is None:
             return NO_PREDECESSORS

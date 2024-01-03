@@ -48,13 +48,7 @@ def _get_child_node_refs(fibre_node: FibreNode) -> Iterator[weakref.ReferenceTyp
         yield from _get_child_node_refs(child)
 
 
-@pytest.fixture()
-def root_fibre_node_props_type() -> Type[FibreNodeFunction]:
-    return ExternalFunctionProps
-
-
-@pytest.fixture()
-def root_fibre_node(fibre: Fibre, root_fibre_node_props_type: Type[FibreNodeFunction]) -> Iterator[FibreNode]:
+def create_root_fibre_node(fibre: Fibre, root_fibre_node_props_type: Type[FibreNodeFunction]) -> Iterator[FibreNode]:
     root_fibre_node: FibreNode = FibreNode(key="root", parent=None, props_type=root_fibre_node_props_type)
     yield root_fibre_node
 
@@ -75,6 +69,11 @@ def root_fibre_node(fibre: Fibre, root_fibre_node_props_type: Type[FibreNodeFunc
             references[node] = referrers
 
     assert references == {}
+
+
+@pytest.fixture()
+def root_fibre_node(fibre: Fibre) -> Iterator[FibreNode]:
+    yield from create_root_fibre_node(fibre, ExternalFunctionProps)
 
 
 @pytest_asyncio.fixture()

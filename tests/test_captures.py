@@ -3,7 +3,7 @@ from typing import Sequence
 import pytest
 from attr import frozen
 
-from pybt2.runtime.captures import CaptureRoot, OrderedCaptureRoot, use_capture
+from pybt2.runtime.captures import OrderedCaptureProvider, UnorderedCaptureProvider, use_capture
 from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
 from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.hooks import use_state
@@ -30,10 +30,12 @@ def test_can_empty_capture(
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(
-            CaptureRoot(IntCaptureKey, ReturnArgument(1, key="capture-child"), key="capture-root")
+            UnorderedCaptureProvider[int, int](
+                IntCaptureKey, ReturnArgument(1, key="capture-child"), key="capture-root"
+            )
         )
 
-    assert execute_1.result == {}
+    assert execute_1.result == (1, {})
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -49,13 +51,15 @@ def test_can_capture_value(
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(
-            CaptureRoot(IntCaptureKey, CaptureChild([("capture-leaf", 1)], key="capture-child"), key="capture-root")
+            UnorderedCaptureProvider[None, int](
+                IntCaptureKey, CaptureChild([("capture-leaf", 1)], key="capture-child"), key="capture-root"
+            )
         )
 
     capture_child_node = root_fibre_node.get_fibre_node(("capture-root", "capture-child"))
     capture_leaf_node = capture_child_node.get_fibre_node(("capture-leaf",))
 
-    assert execute_1.result == {capture_leaf_node: 1}
+    assert execute_1.result == (None, {capture_leaf_node: 1})
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -72,7 +76,7 @@ def test_can_capture_values(
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(
-            CaptureRoot(
+            UnorderedCaptureProvider[None, int](
                 IntCaptureKey,
                 CaptureChild([("capture-1", 1), ("capture-2", 2)], key="capture-child"),
                 key="capture-root",
@@ -83,7 +87,7 @@ def test_can_capture_values(
     capture_1_node = capture_child_node.get_fibre_node(("capture-1",))
     capture_2_node = capture_child_node.get_fibre_node(("capture-2",))
 
-    assert execute_1.result == {capture_1_node: 1, capture_2_node: 2}
+    assert execute_1.result == (None, {capture_1_node: 1, capture_2_node: 2})
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -96,14 +100,14 @@ def test_can_capture_values(
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext):
         return ctx.evaluate_child(
-            CaptureRoot(
+            UnorderedCaptureProvider[None, int](
                 IntCaptureKey,
                 CaptureChild([("capture-1", 1)], key="capture-child"),
                 key="capture-root",
             )
         )
 
-    assert execute_2.result == {capture_1_node: 1}
+    assert execute_2.result == (None, {capture_1_node: 1})
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -126,7 +130,7 @@ def test_incremental_capture(
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(
-            CaptureRoot(
+            UnorderedCaptureProvider[None, int](
                 IntCaptureKey,
                 CaptureChild(key="capture-child"),
                 key="capture-root",
@@ -137,7 +141,7 @@ def test_incremental_capture(
     use_state_node = capture_child_node.get_fibre_node(("use-state",))
     capture_leaf_node = capture_child_node.get_fibre_node(("capture-leaf",))
 
-    assert execute_1.result == {capture_leaf_node: 1}
+    assert execute_1.result == (None, {capture_leaf_node: 1})
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -157,7 +161,7 @@ def test_incremental_capture(
         fibre.run(root_fibre_node, root_fibre_node_state.props)
 
     assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
-    assert root_fibre_node_state.result == {capture_leaf_node: 2}
+    assert root_fibre_node_state.result == (None, {capture_leaf_node: 2})
 
     if fibre.incremental:
         test_instrumentation.assert_evaluations_and_reset(
@@ -182,14 +186,14 @@ def test_ordered_capture(fibre: Fibre, root_fibre_node: FibreNode, test_instrume
     @run_in_fibre(fibre, root_fibre_node)
     def execute_1(ctx: CallContext):
         return ctx.evaluate_child(
-            OrderedCaptureRoot(
+            OrderedCaptureProvider[None, int](
                 IntCaptureKey,
                 CaptureChild([("capture-1", 1), ("capture-2", 2)], key="capture-child"),
                 key="capture-root",
             )
         )
 
-    assert execute_1.result == [1, 2]
+    assert execute_1.result == (None, [1, 2])
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),
@@ -203,14 +207,14 @@ def test_ordered_capture(fibre: Fibre, root_fibre_node: FibreNode, test_instrume
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext):
         return ctx.evaluate_child(
-            OrderedCaptureRoot(
+            OrderedCaptureProvider(
                 IntCaptureKey,
                 CaptureChild([("capture-2", 2), ("capture-1", 1)], key="capture-child"),
                 key="capture-root",
             )
         )
 
-    assert execute_2.result == [2, 1]
+    assert execute_2.result == (None, [2, 1])
 
     test_instrumentation.assert_evaluations_and_reset(
         ("capture-root",),

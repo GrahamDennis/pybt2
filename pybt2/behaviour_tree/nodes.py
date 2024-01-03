@@ -73,3 +73,12 @@ class Always(BTNode):
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
         return self.result
+
+
+@frozen
+class PreconditionAction(BTNode):
+    precondition: BTNode
+    action: BTNode
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return ctx.evaluate_inline(SequenceNode([self.precondition, self.action]))

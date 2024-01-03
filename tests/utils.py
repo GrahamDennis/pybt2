@@ -1,4 +1,4 @@
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, cast
 
 from attr import frozen
 
@@ -19,11 +19,21 @@ class ExternalFunctionProps(RuntimeCallableProps[ResultT]):
 
 def run_in_fibre(
     fibre: Fibre,
-    fibre_node: FibreNode[ExternalFunctionProps[ResultT], ResultT, StateT, UpdateT],
+    fibre_node: FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT],
     drain_work_queue: bool = False,
-) -> Callable[[ExternalFunction[ResultT]], FibreNodeState[ExternalFunctionProps[ResultT], ResultT, StateT]]:
-    def inner(fn: ExternalFunction[ResultT]) -> FibreNodeState[ExternalFunctionProps[ResultT], ResultT, StateT]:
-        result = fibre.run(fibre_node, ExternalFunctionProps(fn))
+) -> Callable[
+    [ExternalFunction[ResultT]], FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]
+]:
+    def inner(
+        fn: ExternalFunction[ResultT],
+    ) -> FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]:
+        result = fibre.run(
+            fibre_node,
+            cast(
+                Callable[[Callable[[CallContext], ResultT]], FibreNodeFunction[ResultT, StateT, UpdateT]],
+                fibre_node.props_type,
+            )(fn),
+        )
         if drain_work_queue:
             fibre.drain_work_queue()
         return result

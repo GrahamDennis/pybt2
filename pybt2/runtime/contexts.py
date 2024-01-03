@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, Generic, Mapping, TypeVar, cast
 
 from attr import frozen
 
@@ -34,6 +34,19 @@ class ContextProvider(RuntimeCallableProps[ResultT], Generic[T, ResultT]):
         context_value_node = ctx.get_last_child()
         context_map: dict[AbstractContextKey, FibreNode] = {self.context_key: context_value_node}
         return ctx.evaluate_child(self.child, additional_contexts=context_map)
+
+
+@frozen(weakref_slot=False)
+class BatchContextProvider(RuntimeCallableProps[ResultT], Generic[ResultT]):
+    contexts: Mapping[ContextKey, Any]
+    child: FibreNodeFunction[ResultT, Any, Any]
+
+    def __call__(self, ctx: CallContext) -> ResultT:
+        context_nodes: dict[AbstractContextKey, FibreNode] = {}
+        for context_key, context_value in self.contexts.items():
+            ctx.evaluate_child(ContextValue(context_value), key=_context_value_key(context_key))
+            context_nodes[context_key] = ctx.get_last_child()
+        return ctx.evaluate_child(self.child, additional_contexts=context_nodes)
 
 
 def use_context(ctx: CallContext, context_key: ContextKey[T]) -> T:

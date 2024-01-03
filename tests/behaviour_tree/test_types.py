@@ -13,7 +13,7 @@ from pybt2.behaviour_tree.types import (
     is_success,
 )
 from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
-from tests.behaviour_tree.utils import run_node_in_fibre
+from tests.utils import run_in_fibre
 
 
 def test_is_success():
@@ -37,8 +37,8 @@ def test_is_running():
 @pytest.mark.parametrize(
     ("node_return", "expected"), [(True, Success()), (False, Failure())], ids=["return=True", "return=False"]
 )
-def test_can_return_bool(node_return: bool, expected: Result, fibre: Fibre, root_fibre_node: FibreNode):
-    @run_node_in_fibre(fibre, root_fibre_node)
+def test_can_return_bool(node_return: bool, expected: Result, fibre: Fibre, bt_root_fibre_node: FibreNode):
+    @run_in_fibre(fibre, bt_root_fibre_node, False)
     def execute(_ctx: CallContext) -> BTNodeResult:
         return node_return
 
@@ -50,8 +50,8 @@ def test_can_return_bool(node_return: bool, expected: Result, fibre: Fibre, root
     [(AlwaysSuccess(), Success()), (AlwaysFailure(), Failure()), (AlwaysRunning(), Running())],
     ids=["AlwaysSuccess", "AlwaysFailure", "AlwaysRunning"],
 )
-def test_can_return_node(node_return: BTNode, expected: Result, fibre: Fibre, root_fibre_node: FibreNode):
-    @run_node_in_fibre(fibre, root_fibre_node)
+def test_can_return_node(node_return: BTNode, expected: Result, fibre: Fibre, bt_root_fibre_node: FibreNode):
+    @run_in_fibre(fibre, bt_root_fibre_node, False)
     def execute(_ctx: CallContext) -> BTNodeResult:
         return node_return
 
