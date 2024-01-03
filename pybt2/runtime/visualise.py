@@ -56,7 +56,7 @@ class NodeLabel:
             formatted_field_value = textwrap.shorten(
                 field.repr(field_value) if callable(field.repr) else repr(field_value), width=40
             )
-            lines.append(f'<tr><td align="left">- <i>{field.name}</i>: {html.escape(formatted_field_value)}</td></tr>')
+            lines.append(f'<tr><td align="left"><i>{field.name}</i>={html.escape(formatted_field_value)}</td></tr>')
 
         return "\n".join(lines)
 
@@ -79,11 +79,7 @@ class DotRenderer:
         if (dot_node := self._dot_nodes.get(fibre_node)) is not None:
             return dot_node
         fibre_node_state = fibre_node.get_fibre_node_state()
-        label: str | NodeLabel
-        if fibre_node_state is None:
-            label = f"{fibre_node.props_type.__qualname__}(<unevaluated>)"
-        else:
-            label = NodeLabel.create(fibre_node)
+        label = NodeLabel.create(fibre_node)
         dot_node = pydot.Node(name=get_node_name(fibre_node.key_path), label=label, shape="plain")
         self._graph.add_node(dot_node)
         self._dot_nodes[fibre_node] = dot_node

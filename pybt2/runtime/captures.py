@@ -17,7 +17,6 @@ from pybt2.runtime.types import (
 
 T = TypeVar("T")
 
-DEFAULT_CAPTURE_CHILD_KEY = "__CaptureRoot.Child"
 CAPTURE_CONSUMER_KEY = "__CaptureRoot.Consumer"
 
 

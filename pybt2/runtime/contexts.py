@@ -8,8 +8,6 @@ from pybt2.runtime.types import AbstractContextKey, ContextKey, FibreNodeFunctio
 
 T = TypeVar("T")
 
-DEFAULT_CONTEXT_CHILD_KEY = "__ContextProvider.Child"
-
 
 def _context_value_key(context_key: ContextKey[T]) -> str:
     return f"__ContextProvider.Value.{context_key.name}"
