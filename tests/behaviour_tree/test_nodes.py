@@ -1,7 +1,7 @@
 import pytest
 
-from pybt2.behaviour_tree.nodes import Always, AlwaysFailure, AlwaysRunning, AlwaysSuccess, Fallback, Sequence
-from pybt2.behaviour_tree.types import BTNodeResult, Failure, Running, Success, is_success
+from pybt2.behaviour_tree.nodes import Always, AlwaysFailure, AlwaysRunning, AlwaysSuccess, Fallback, Not, Sequence
+from pybt2.behaviour_tree.types import BTNode, BTNodeResult, Failure, Result, Running, Success, is_success
 from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
 from tests.instrumentation import CallRecordingInstrumentation
 from tests.utils import run_in_fibre
@@ -88,3 +88,16 @@ def test_always(fibre: Fibre, bt_root_fibre_node: FibreNode):
 
     assert is_success(execute.result)
     assert execute.result == Success(1234)
+
+
+@pytest.mark.parametrize(
+    ("node", "expected"),
+    [(AlwaysSuccess(), Failure()), (AlwaysFailure(), Success()), (AlwaysRunning(), Running())],
+    ids=["Success", "Failure", "Running"],
+)
+def test_not(node: BTNode, expected: Result, fibre: Fibre, bt_root_fibre_node: FibreNode):
+    @run_in_fibre(fibre, bt_root_fibre_node)
+    def execute(_ctx: CallContext) -> BTNodeResult:
+        return Not(node)
+
+    assert execute.result == expected

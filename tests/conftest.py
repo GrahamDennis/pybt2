@@ -1,7 +1,7 @@
 import asyncio
 import gc
 import weakref
-from typing import Any, AsyncIterator, Callable, Collection, Iterator, Type, cast
+from typing import AsyncIterator, Callable, Collection, Iterator, Type, cast
 
 import pytest
 import pytest_asyncio
@@ -62,13 +62,9 @@ def create_root_fibre_node(fibre: Fibre, root_fibre_node_props_type: Type[FibreN
     )
     fibre.drain_work_queue()
 
-    references: dict[FibreNode, Any] = {}
     for node_ref in node_refs:
         if (node := node_ref()) is not None:
-            referrers = gc.get_referrers(node)
-            references[node] = referrers
-
-    assert references == {}
+            assert len(gc.get_referrers(node)) == 0
 
 
 @pytest.fixture()

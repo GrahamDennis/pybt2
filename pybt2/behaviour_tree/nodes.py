@@ -1,3 +1,4 @@
+import typing
 from typing import Optional
 
 from attr import frozen
@@ -33,6 +34,9 @@ def Sequence(*children: BTNode, key: Optional[Key] = None) -> BTNode:
     return SequenceNode(children, key=key)  # type: ignore[arg-type]
 
 
+AllOf = Sequence
+
+
 @frozen
 class FallbackNode(BTNode):
     children: Children
@@ -47,6 +51,9 @@ class FallbackNode(BTNode):
 
 def Fallback(*children: BTNode, key: Optional[Key] = None) -> BTNode:
     return FallbackNode(children, key=key)  # type: ignore[arg-type]
+
+
+AnyOf = Fallback
 
 
 @frozen
@@ -82,3 +89,26 @@ class PreconditionAction(BTNode):
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
         return ctx.evaluate_inline(SequenceNode([self.precondition, self.action]))
+
+
+@frozen
+class PostconditionPreconditionAction(BTNode):
+    postcondition: BTNode
+    actions: typing.Sequence[BTNode]
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return ctx.evaluate_child(Fallback(self.postcondition, *self.actions))
+
+
+@frozen
+class Not(BTNode):
+    child: BTNode
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        match ctx.evaluate_child(self.child):
+            case Success(value):
+                return Failure(value)
+            case Failure(value):
+                return Success(value)
+            case _ as result:
+                return result
