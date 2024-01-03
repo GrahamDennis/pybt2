@@ -188,12 +188,12 @@ class CallContext:
         )
 
 
-@mutable(eq=False, weakref_slot=static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT)
+@mutable(eq=False, weakref_slot=static_configuration.ENABLE_WEAK_REFERENCE_SUPPORT, repr=False)
 class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # I'd really like to be able to say that PropsT is bound by FibreNodeFunction[ResultT, StateT, UpdateT], but that's
     # not possible. That causes some unfortunate casts to be required throughout.
     key: Key = field(on_setattr=setters.frozen)
-    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen, repr=False)
+    parent: Optional["FibreNode"] = field(on_setattr=setters.frozen)
     props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]] = field(on_setattr=setters.frozen)
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
@@ -211,6 +211,9 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     # much of a difference
     _successors: Optional[list["FibreNode"]] = None
     _tree_structure_successors: Optional[list["FibreNode"]] = None
+
+    def __repr__(self) -> str:
+        return f"FibreNode(key_path={self.key_path})"
 
     def add_successor(self, successor_fibre_node: "FibreNode") -> None:
         if self._successors is None:

@@ -75,5 +75,8 @@ class TestRobotVisualisation:
         graph = DotRenderer(root_fibre_node).to_dot()
 
         with tempfile.NamedTemporaryFile(prefix="visualise_robot", suffix=".png", delete=False) as f:
-            f.write(graph.create(format="png"))
+            try:
+                f.write(graph.create(format="png"))
+            except FileNotFoundError:
+                pytest.skip("dot is not installed")
             logger.info("Created image at %s", f.name)
