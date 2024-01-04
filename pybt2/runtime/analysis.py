@@ -16,6 +16,8 @@ from pybt2.runtime.types import (
     UpdateT,
 )
 
+_EMPTY_ITERATOR = iter(())
+
 
 class SupportsAnalysis(FibreNodeFunction, metaclass=ABCMeta):
     @classmethod
@@ -72,9 +74,9 @@ class CallContextForAnalysis(CallContext):
 
     @override
     def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
-        return self.ctx.evaluate_inline(
-            props.get_props_for_analysis() if isinstance(props, SupportsAnalysis) else props
-        )
+        resolved_props = props.get_props_for_analysis() if isinstance(props, SupportsAnalysis) else props
+        child_fibre_node_state = resolved_props.run(self, None, _EMPTY_ITERATOR)
+        return child_fibre_node_state.result
 
     @override
     def get_last_child(self) -> "FibreNode":

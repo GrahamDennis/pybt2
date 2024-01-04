@@ -140,10 +140,10 @@ class PreconditionAction(BTNode):
 @frozen
 class PostconditionPreconditionAction(BTNode):
     postcondition: BTNode
-    actions: typing.Sequence[BTNode]
+    actions: typing.Sequence[BTNode] = field(repr=False)
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return ctx.evaluate_child(Fallback(self.postcondition, *self.actions))
+        return ctx.evaluate_inline(Fallback(self.postcondition, *self.actions))
 
 
 @frozen

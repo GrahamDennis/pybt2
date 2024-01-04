@@ -71,7 +71,7 @@ class RobotCaptureProvider(RuntimeCallableProps[tuple[Result, RobotDemands]]):
     child: BTNode
 
     def __call__(self, ctx: CallContext) -> tuple[Result, RobotDemands]:
-        child_result, ordered_velocity_demands = ctx.evaluate_inline(
+        child_result, ordered_velocity_demands = ctx.evaluate_child(
             OrderedCaptureProvider[Result, float](RobotVelocityDemandsCaptureKey, self.child)
         )
         first_velocity_demand = ordered_velocity_demands[0] if ordered_velocity_demands else 0.0

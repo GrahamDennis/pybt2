@@ -67,6 +67,7 @@ class DotRenderer:
     _graph: pydot.Dot = Factory(lambda: pydot.Dot("render", graph_type="digraph", ordering="out"))
 
     _dot_nodes: dict[FibreNode, pydot.Node] = Factory(dict)
+    _render_tree_position_dependency_edges: bool = False
 
     def to_dot(self) -> pydot.Dot:
         root_node = pydot.Node(name="...", label="Root")
@@ -99,15 +100,16 @@ class DotRenderer:
                 pydot.Edge(dot_node.get_name(), predecessor_dot_node.get_name(), constraint=False, style="dashed")
             )
 
-        for tree_structure_predecessor_fibre_node in fibre_node_state.tree_structure_predecessors:
-            tree_structure_predecessor_dot_node = self._render_fibre_node(tree_structure_predecessor_fibre_node)
-            self._graph.add_edge(
-                pydot.Edge(
-                    dot_node.get_name(),
-                    tree_structure_predecessor_dot_node.get_name(),
-                    constraint=False,
-                    style="dotted",
+        if self._render_tree_position_dependency_edges:
+            for tree_structure_predecessor_fibre_node in fibre_node_state.tree_structure_predecessors:
+                tree_structure_predecessor_dot_node = self._render_fibre_node(tree_structure_predecessor_fibre_node)
+                self._graph.add_edge(
+                    pydot.Edge(
+                        dot_node.get_name(),
+                        tree_structure_predecessor_dot_node.get_name(),
+                        constraint=False,
+                        style="dotted",
+                    )
                 )
-            )
 
         return dot_node
