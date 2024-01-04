@@ -64,7 +64,7 @@ class NodeLabel:
 @mutable
 class DotRenderer:
     _root_fibre_node: FibreNode
-    _graph: pydot.Dot = Factory(lambda: pydot.Dot("render", graph_type="digraph"))
+    _graph: pydot.Dot = Factory(lambda: pydot.Dot("render", graph_type="digraph", ordering="out"))
 
     _dot_nodes: dict[FibreNode, pydot.Node] = Factory(dict)
 

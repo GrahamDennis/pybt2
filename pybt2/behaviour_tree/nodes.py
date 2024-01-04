@@ -1,7 +1,8 @@
 import typing
-from typing import Optional
+from typing import Optional, Type
 
-from attr import frozen
+from attr import evolve, field, frozen
+from typing_extensions import override
 
 from pybt2.behaviour_tree.types import (
     BTNode,
@@ -14,20 +15,43 @@ from pybt2.behaviour_tree.types import (
     is_failure,
     is_success,
 )
+from pybt2.runtime.analysis import SupportsAnalysis
 from pybt2.runtime.fibre import CallContext
-from pybt2.runtime.types import Key
+from pybt2.runtime.types import FibreNodeFunction, Key
 
 
 @frozen
-class SequenceNode(BTNode):
-    children: Children
+class SequenceNode(BTNode, SupportsAnalysis):
+    children: Children = field(repr=False)
+    analysis_mode: bool = field(default=False, repr=False)
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
+        if self.analysis_mode:
+            return self.evaluate_in_analysis_mode(ctx)
         for child in self.children:
             result = ctx.evaluate_child(child)
             if not is_success(result):
                 return result
         return Success()
+
+    def evaluate_in_analysis_mode(self, ctx: CallContext) -> BTNodeResult:
+        results: list[Result] = []
+        for child in self.children:
+            results.append(ctx.evaluate_child(child))
+
+        for result in results:
+            if not is_success(result):
+                return result
+        return Success()
+
+    @classmethod
+    @override
+    def get_props_type_for_analysis(cls) -> Type[FibreNodeFunction]:
+        return cls
+
+    @override
+    def get_props_for_analysis(self) -> FibreNodeFunction:
+        return evolve(self, analysis_mode=True)
 
 
 def Sequence(*children: BTNode, key: Optional[Key] = None) -> BTNode:
@@ -38,15 +62,37 @@ AllOf = Sequence
 
 
 @frozen
-class FallbackNode(BTNode):
-    children: Children
+class FallbackNode(BTNode, SupportsAnalysis):
+    children: Children = field(repr=False)
+    analysis_mode: bool = field(default=False, repr=False)
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
+        if self.analysis_mode:
+            return self.evaluate_in_analysis_mode(ctx)
         for child in self.children:
             result = ctx.evaluate_child(child)
             if not is_failure(result):
                 return result
         return Failure()
+
+    def evaluate_in_analysis_mode(self, ctx: CallContext) -> BTNodeResult:
+        results: list[Result] = []
+        for child in self.children:
+            results.append(ctx.evaluate_child(child))
+
+        for result in results:
+            if not is_failure(result):
+                return result
+        return Success()
+
+    @classmethod
+    @override
+    def get_props_type_for_analysis(cls) -> Type[FibreNodeFunction]:
+        return cls
+
+    @override
+    def get_props_for_analysis(self) -> FibreNodeFunction:
+        return evolve(self, analysis_mode=True)
 
 
 def Fallback(*children: BTNode, key: Optional[Key] = None) -> BTNode:

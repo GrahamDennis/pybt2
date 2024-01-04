@@ -11,6 +11,7 @@ from typing import (
     MutableMapping,
     MutableSequence,
     Optional,
+    Protocol,
     Sequence,
     Type,
     cast,
@@ -348,7 +349,10 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             return cast(FibreNodeState[PropsT, ResultT, StateT], previous_fibre_node_state)
 
         fibre.instrumentation.on_node_evaluation_start(self)
-        ctx = DefaultCallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
+        ctx = fibre.call_context_factory.create_call_context(
+            fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state
+        )
+        DefaultCallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
         next_fibre_node_state = cast(FibreNodeFunction[ResultT, StateT, UpdateT], props).run(
             ctx,
             previous_state=previous_fibre_node_state,
@@ -475,10 +479,32 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
                 tree_position_successor.increment_next_dependencies_version_and_schedule(schedule_on_fibre)
 
 
+class CallContextFactory(Protocol):
+    def create_call_context(
+        self,
+        fibre: "Fibre",
+        fibre_node: FibreNode,
+        previous_state: Optional[FibreNodeState],
+    ) -> CallContext:
+        ...
+
+
+@frozen
+class DefaultCallContextFactory(CallContextFactory):
+    def create_call_context(
+        self,
+        fibre: "Fibre",
+        fibre_node: FibreNode,
+        previous_state: Optional[FibreNodeState],
+    ) -> CallContext:
+        return DefaultCallContext(fibre, fibre_node, previous_state)
+
+
 @mutable(eq=False, weakref_slot=False)
 class Fibre:
     _work_queue: deque[FibreNode] = Factory(deque)
     _evaluation_stack: list[FibreNode] = Factory(list)
+    call_context_factory: CallContextFactory = DefaultCallContextFactory()
     instrumentation: FibreInstrumentation = NoOpFibreInstrumentation()
     incremental: bool = field(default=True, on_setattr=setters.frozen)
 

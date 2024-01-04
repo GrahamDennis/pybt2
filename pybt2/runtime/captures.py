@@ -1,5 +1,5 @@
 import itertools
-from typing import Any, Generic, Iterator, Mapping, MutableMapping, Optional, Sequence, Set, TypeVar, cast
+from typing import Any, Generic, Iterator, Mapping, MutableSequence, Optional, Sequence, Set, TypeVar, cast
 
 from attr import Factory, field, frozen, mutable
 from typing_extensions import Self, assert_never, override
@@ -29,7 +29,6 @@ class InvalidRootTreePositionNodeError(Exception):
 @frozen(weakref_slot=False)
 class AddCaptureEntry(Generic[T]):
     fibre_node: FibreNode
-    value: T
 
 
 @frozen(weakref_slot=False)
@@ -48,20 +47,26 @@ class _CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEnt
         previous_state: Optional[FibreNodeState[Self, Mapping[FibreNode, T], None]],
         enqueued_updates: Iterator[CaptureEntryAction[T]],
     ) -> FibreNodeState[Self, Mapping[FibreNode, T], None]:
-        captures: MutableMapping[FibreNode, T] = {**previous_state.result} if previous_state is not None else {}
+        captures: MutableSequence[FibreNode] = [*previous_state.predecessors] if previous_state is not None else []
         for update in enqueued_updates:
             match update:
-                case AddCaptureEntry(fibre_node, value):
-                    captures[fibre_node] = value
+                case AddCaptureEntry(fibre_node):
+                    captures.append(fibre_node)
                 case RemoveCaptureEntry(fibre_node):
-                    del captures[fibre_node]
+                    captures.remove(fibre_node)
                 case _:  # pragma: no cover
                     assert_never(update)
+        result: dict[FibreNode, T] = {}
+        for capture in captures:
+            assert (capture_fibre_node_state := capture.get_fibre_node_state()) is not None
+            result[capture] = capture_fibre_node_state.result
+
         return FibreNodeState(
             props=self,
-            result=captures,
+            result=result,
             result_version=previous_state.result_version + 1 if previous_state is not None else 1,
             state=None,
+            predecessors=captures,
         )
 
 
@@ -166,25 +171,24 @@ class _CaptureValueState(Generic[T]):
 
 
 @frozen(weakref_slot=False)
-class _CaptureValue(FibreNodeFunction[None, _CaptureValueState[T], None], Generic[T]):
+class CaptureValue(FibreNodeFunction[T, _CaptureValueState[T], None], Generic[T]):
     capture_consumer_fibre_node: FibreNode[
         _CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]
-    ] = field(repr=lambda node: str(node.key_path))
+    ] = field(repr=False)
     value: T
 
     def run(
         self,
         ctx: CallContext,
-        previous_state: Optional[FibreNodeState[Self, None, _CaptureValueState[T]]],
+        previous_state: Optional[FibreNodeState[Self, T, _CaptureValueState[T]]],
         enqueued_updates: Iterator[None],
-    ) -> FibreNodeState[Self, None, _CaptureValueState[T]]:
-        if previous_state is None or previous_state.props.value != self.value:
-            self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(ctx.fibre_node, self.value), ctx.fibre)
+    ) -> FibreNodeState[Self, T, _CaptureValueState[T]]:
+        if previous_state is None:
+            self.capture_consumer_fibre_node.enqueue_update(AddCaptureEntry(ctx.fibre_node), ctx.fibre)
 
-        return FibreNodeState(
-            props=self,
-            result=None,
-            result_version=1,
+        return ctx.create_fibre_node_state(
+            self,
+            self.value,
             state=_CaptureValueState(
                 capture_provider_fibre_node=ctx.fibre_node,
                 capture_consumer_fibre_node=self.capture_consumer_fibre_node,
@@ -194,7 +198,7 @@ class _CaptureValue(FibreNodeFunction[None, _CaptureValueState[T], None], Generi
 
     @classmethod
     @override
-    def dispose(cls, state: FibreNodeState[Self, None, _CaptureValueState[T]]) -> None:
+    def dispose(cls, state: FibreNodeState[Self, T, _CaptureValueState[T]]) -> None:
         capture_provider_state = state.state
         capture_provider_state.capture_consumer_fibre_node.enqueue_update(
             RemoveCaptureEntry(capture_provider_state.capture_provider_fibre_node), capture_provider_state.fibre
@@ -206,4 +210,4 @@ def use_capture(ctx: CallContext, capture_key: CaptureKey[T], value: T, key: Opt
         FibreNode[_CaptureConsumer, Mapping[FibreNode, T], None, CaptureEntryAction[T]],
         ctx.fibre_node.contexts[capture_key],
     )
-    ctx.evaluate_child(_CaptureValue(capture_consumer_fibre_node, value), key=key)
+    ctx.evaluate_child(CaptureValue(capture_consumer_fibre_node, value), key=key)

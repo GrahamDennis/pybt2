@@ -8,7 +8,8 @@ from pybt2.behaviour_tree.nodes import (
     AlwaysRunning,
 )
 from pybt2.behaviour_tree.types import Running, Success
-from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
+from pybt2.runtime.analysis import AnalysisCallContextFactory
+from pybt2.runtime.fibre import CallContext, DefaultCallContextFactory, Fibre, FibreNode
 from pybt2.runtime.visualise import DotRenderer
 from tests.behaviour_tree.robot import GuaranteePowerSupply, MoveTowards, Robot, RobotSimulator, RobotState, SafeRobot
 from tests.instrumentation import CallRecordingInstrumentation
@@ -63,7 +64,11 @@ class TestRobotVisualisation:
     @pytest.fixture()
     def fibre(self, test_instrumentation: CallRecordingInstrumentation) -> Fibre:
         # So that we only run these tests once
-        return Fibre(instrumentation=test_instrumentation, incremental=False)
+        return Fibre(
+            instrumentation=test_instrumentation,
+            incremental=False,
+            call_context_factory=AnalysisCallContextFactory(DefaultCallContextFactory()),
+        )
 
     def test_visualise_robot(self, fibre: Fibre, root_fibre_node: FibreNode):
         @run_in_fibre(fibre, root_fibre_node)

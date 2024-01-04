@@ -1,10 +1,10 @@
 from abc import ABCMeta, abstractmethod
-from typing import Generic, Mapping, Optional, Type
+from typing import Mapping, Optional, Type
 
 from attr import frozen
 from typing_extensions import override
 
-from pybt2.runtime.fibre import CallContext, Fibre, FibreNode
+from pybt2.runtime.fibre import CallContext, CallContextFactory, Fibre, FibreNode
 from pybt2.runtime.types import (
     AbstractContextKey,
     FibreNodeFunction,
@@ -17,16 +17,14 @@ from pybt2.runtime.types import (
 )
 
 
-class SupportsAnalysis(
-    FibreNodeFunction[ResultT, StateT, UpdateT], Generic[ResultT, StateT, UpdateT], metaclass=ABCMeta
-):
+class SupportsAnalysis(FibreNodeFunction, metaclass=ABCMeta):
     @classmethod
     @abstractmethod
-    def get_props_type_for_analysis(cls) -> Type[FibreNodeFunction[ResultT, StateT, UpdateT]]:
+    def get_props_type_for_analysis(cls) -> Type[FibreNodeFunction]:
         ...
 
     @abstractmethod
-    def get_props_for_analysis(self) -> FibreNodeFunction[ResultT, StateT, UpdateT]:
+    def get_props_for_analysis(self) -> FibreNodeFunction:
         ...
 
 
@@ -87,3 +85,16 @@ class CallContextForAnalysis(CallContext):
         self, props: PropsT, result: ResultT, state: StateT
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
         return self.ctx.create_fibre_node_state(props, result, state)
+
+
+@frozen
+class AnalysisCallContextFactory(CallContextFactory):
+    delegate: CallContextFactory
+
+    def create_call_context(
+        self,
+        fibre: "Fibre",
+        fibre_node: FibreNode,
+        previous_state: Optional[FibreNodeState],
+    ) -> CallContext:
+        return CallContextForAnalysis(self.delegate.create_call_context(fibre, fibre_node, previous_state))
