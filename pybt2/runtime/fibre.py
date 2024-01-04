@@ -1,4 +1,5 @@
 import itertools
+from abc import ABCMeta, abstractmethod
 from collections import deque
 from typing import (
     Any,
@@ -16,6 +17,7 @@ from typing import (
 )
 
 from attr import Factory, field, frozen, mutable, setters
+from typing_extensions import override
 
 from pybt2.runtime import static_configuration
 from pybt2.runtime.exceptions import ChildAlreadyExistsError, PropsTypeConflictError
@@ -65,8 +67,56 @@ class FibreNodeExecutionToken(Generic[UpdateT]):
             return itertools.islice(self._enqueued_updates, self.enqueued_updates_stop)
 
 
+class CallContext(metaclass=ABCMeta):
+    @property
+    @abstractmethod
+    def fibre(self) -> "Fibre":
+        ...
+
+    @property
+    @abstractmethod
+    def fibre_node(self) -> "FibreNode":
+        ...
+
+    @abstractmethod
+    def add_predecessor(self, fibre_node: "FibreNode") -> None:
+        ...
+
+    @abstractmethod
+    def get_child_fibre_node(
+        self,
+        props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+    ) -> "FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]":
+        ...
+
+    @abstractmethod
+    def evaluate_child(
+        self,
+        props: FibreNodeFunction[ResultT, StateT, UpdateT],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+    ) -> ResultT:
+        ...
+
+    @abstractmethod
+    def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
+        ...
+
+    @abstractmethod
+    def get_last_child(self) -> "FibreNode":
+        ...
+
+    @abstractmethod
+    def create_fibre_node_state(
+        self, props: PropsT, result: ResultT, state: StateT
+    ) -> FibreNodeState[PropsT, ResultT, StateT]:
+        ...
+
+
 @mutable(eq=False, weakref_slot=False)
-class CallContext:
+class DefaultCallContext(CallContext):
     fibre: "Fibre"
     fibre_node: "FibreNode"
     _previous_state: Optional["FibreNodeState"]
@@ -74,13 +124,14 @@ class CallContext:
     _current_predecessors: Optional[MutableSequence["FibreNode"]] = None
     _current_children: Optional[MutableSequence["FibreNode"]] = None
 
+    @override
     def add_predecessor(self, fibre_node: "FibreNode") -> None:
         if self._current_predecessors is None:
             self._current_predecessors = [fibre_node]
         else:
             self._current_predecessors.append(fibre_node)
 
-    def add_child(self, fibre_node: "FibreNode") -> None:
+    def _add_child(self, fibre_node: "FibreNode") -> None:
         if self._current_children is None:
             self._current_children = [fibre_node]
         else:
@@ -106,6 +157,7 @@ class CallContext:
                     return child
         return None
 
+    @override
     def get_child_fibre_node(
         self,
         props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
@@ -132,6 +184,7 @@ class CallContext:
                 else self.fibre_node.contexts,
             )
 
+    @override
     def evaluate_child(
         self,
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
@@ -141,10 +194,11 @@ class CallContext:
         child_fibre_node = self.get_child_fibre_node(
             type(props), key=key if key is not None else props.key, additional_contexts=additional_contexts
         )
-        self.add_child(child_fibre_node)
+        self._add_child(child_fibre_node)
         child_fibre_node_state = self.fibre.run(child_fibre_node, props)
         return child_fibre_node_state.result
 
+    @override
     def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
         child_fibre_node_state = props.run(self, None, _EMPTY_ITERATOR)
         return child_fibre_node_state.result
@@ -161,11 +215,13 @@ class CallContext:
         else:
             return tuple(self._current_children)
 
+    @override
     def get_last_child(self) -> "FibreNode":
         if self._current_children is None:
             raise IndexError()
         return self._current_children[-1]
 
+    @override
     def create_fibre_node_state(
         self, props: PropsT, result: ResultT, state: StateT
     ) -> FibreNodeState[PropsT, ResultT, StateT]:
@@ -292,7 +348,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
             return cast(FibreNodeState[PropsT, ResultT, StateT], previous_fibre_node_state)
 
         fibre.instrumentation.on_node_evaluation_start(self)
-        ctx = CallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
+        ctx = DefaultCallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
         next_fibre_node_state = cast(FibreNodeFunction[ResultT, StateT, UpdateT], props).run(
             ctx,
             previous_state=previous_fibre_node_state,
