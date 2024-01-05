@@ -23,7 +23,9 @@ Where the "Guarantee Power Supply" moves the robot towards the charging station 
 from attrs import frozen
 from pybt2.behaviour_tree.types import BTNode, BTNodeResult
 from pybt2.runtime.fibre import CallContext
-from pybt2.behaviour_tree.nodes import PreconditionAction, PostconditionPreconditionAction, AnyOf, AllOf, Not
+from pybt2.behaviour_tree.nodes import (
+  PreconditionAction, PostconditionPreconditionAction, AnyOf, AllOf, Not
+)
 
 @frozen
 class SafeRobot(BTNode):
