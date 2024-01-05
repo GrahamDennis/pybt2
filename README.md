@@ -1,84 +1,169 @@
-
-# Python Project Template
-
-A low dependency and really simple to start project template for Python Projects.
-
-See also 
-- [Flask-Project-Template](https://github.com/rochacbruno/flask-project-template/) for a full feature Flask project including database, API, admin interface, etc.
-- [FastAPI-Project-Template](https://github.com/rochacbruno/fastapi-project-template/) The base to start an openapi project featuring: SQLModel, Typer, FastAPI, JWT Token Auth, Interactive Shell, Management Commands.
-
-### HOW TO USE THIS TEMPLATE
-
-> **DO NOT FORK** this is meant to be used from **[Use this template](https://github.com/rochacbruno/python-project-template/generate)** feature.
-
-1. Click on **[Use this template](https://github.com/rochacbruno/python-project-template/generate)**
-3. Give a name to your project  
-   (e.g. `my_awesome_project` recommendation is to use all lowercase and underscores separation for repo names.)
-3. Wait until the first run of CI finishes  
-   (Github Actions will process the template and commit to your new repo)
-4. If you want [codecov](https://about.codecov.io/sign-up/) Reports and Automatic Release to [PyPI](https://pypi.org)  
-  On the new repository `settings->secrets` add your `PYPI_API_TOKEN` and `CODECOV_TOKEN` (get the tokens on respective websites)
-4. Read the file [CONTRIBUTING.md](CONTRIBUTING.md)
-5. Then clone your new project and happy coding!
-
-> **NOTE**: **WAIT** until first CI run on github actions before cloning your new project.
-
-### What is included on this template?
-
-- 🖼️ Templates for starting multiple application types:
-  * **Basic low dependency** Python program (default) [use this template](https://github.com/rochacbruno/python-project-template/generate)
-  * **Flask** with database, admin interface, restapi and authentication [use this template](https://github.com/rochacbruno/flask-project-template/generate).
-  **or Run `make init` after cloning to generate a new project based on a template.**
-- 📦 A basic [setup.py](setup.py) file to provide installation, packaging and distribution for your project.  
-  Template uses setuptools because it's the de-facto standard for Python packages, you can run `make switch-to-poetry` later if you want.
-- 🤖 A [Makefile](Makefile) with the most useful commands to install, test, lint, format and release your project.
-- 📃 Documentation structure using [mkdocs](http://www.mkdocs.org)
-- 💬 Auto generation of change log using **gitchangelog** to keep a HISTORY.md file automatically based on your commit history on every release.
-- 🐋 A simple [Containerfile](Containerfile) to build a container image for your project.  
-  `Containerfile` is a more open standard for building container images than Dockerfile, you can use buildah or docker with this file.
-- 🧪 Testing structure using [pytest](https://docs.pytest.org/en/latest/)
-- ✅ Code linting using [flake8](https://flake8.pycqa.org/en/latest/)
-- 📊 Code coverage reports using [codecov](https://about.codecov.io/sign-up/)
-- 🛳️ Automatic release to [PyPI](https://pypi.org) using [twine](https://twine.readthedocs.io/en/latest/) and github actions.
-- 🎯 Entry points to execute your program using `python -m <pybt2>` or `$ pybt2` with basic CLI argument parsing.
-- 🔄 Continuous integration using [Github Actions](.github/workflows/) with jobs to lint, test and release your project on Linux, Mac and Windows environments.
-
-> Curious about architectural decisions on this template? read [ABOUT_THIS_TEMPLATE.md](ABOUT_THIS_TEMPLATE.md)  
-> If you want to contribute to this template please open an [issue](https://github.com/rochacbruno/python-project-template/issues) or fork and send a PULL REQUEST.
-
-[❤️ Sponsor this project](https://github.com/sponsors/rochacbruno/)
-
-<!--  DELETE THE LINES ABOVE THIS AND WRITE YOUR PROJECT README BELOW -->
-
----
 # pybt2
 
-[![codecov](https://codecov.io/gh/GrahamDennis/pybt2/branch/main/graph/badge.svg?token=pybt2_token_here)](https://codecov.io/gh/GrahamDennis/pybt2)
+[![codecov](https://codecov.io/gh/GrahamDennis/pybt2/branch/main/graph/badge.svg?token=SG5R6PEZG1)](https://codecov.io/gh/GrahamDennis/pybt2)
 [![CI](https://github.com/GrahamDennis/pybt2/actions/workflows/main.yml/badge.svg)](https://github.com/GrahamDennis/pybt2/actions/workflows/main.yml)
 
-Awesome pybt2 created by GrahamDennis
+pybt2 is a [React][react]-inspired incremental [behaviour tree][behaviour-tree] library.
 
-## Install it from PyPI
+* **React-inspired**: Behaviour Trees are defined in Python, and each node can dynamically construct its children on each tick. Data can be implicitly passed into children via Contexts, and in-tree state is supported via [React-like hooks][react-hooks] like `use_state`, `use_effect` or `use_async`. No stringly-typed blackboards here!
+  Although child nodes are dynamically constructed on each tick, each child node has an identifying key path that can be used to identify corresponding nodes between ticks to propagate state as required.
+* **incremental**: The complete tree isn't evaluated on each tick, only the parts that are out-of-date. `pybt` tracks data dependencies between nodes and memoizes node arguments and return values to only re-run nodes that need to be.
 
-```bash
-pip install pybt2
+  Behind-the-scenes, `pybt2` has an runtime that supports incremental execution of call graphs of functions returning any data, not just the standard behaviour-tree values of `Success`, `Running` or `Failure`. 
+
+## A simple example
+
+Consider the behaviour described in §5.4.2 of [Behavior Trees in Robotics and AI][bt-paper]:
+
+![](images/safe3.png)
+
+Where the "Guarantee Power Supply" moves the robot towards the charging station if the power level is less than 20%. This Behaviour Tree can be described in pybt2 as (see [robot.py](./tests/behaviour_tree/robot.py)):
+
+```python
+from attrs import frozen
+from pybt2.behaviour_tree.types import BTNode, BTNodeResult
+from pybt2.runtime.fibre import CallContext
+from pybt2.behaviour_tree.nodes import PreconditionAction, PostconditionPreconditionAction, AnyOf, AllOf, Not
+
+@frozen
+class SafeRobot(BTNode):
+    """
+    Root behaviour tree node that ensures there's sufficient power before performing some other task.
+    """
+    task: BTNode
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return PreconditionAction(precondition=GuaranteePowerSupply(), action=self.task)
+
+
+@frozen
+class GuaranteePowerSupply(BTNode):
+    """
+    A subtree to maintain sufficient battery charge.
+    
+    If the battery level falls below 20%, then move the robot towards the charging area and charge until full.
+    """
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return PostconditionPreconditionAction(
+            postcondition=AnyOf(
+                BatteryLevelIsAtLeast(100.0), AllOf(Not(InChargingArea()), BatteryLevelIsAtLeast(20.0))
+            ),
+            actions=[MoveTowardsChargingArea()],
+        )
+
+
+@frozen
+class BatteryLevelIsAtLeast(BTNode):
+    """
+    A condition node that reads the current battery level from the battery context using a React-inspired use_context hook.
+    """
+    threshold: float
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return use_context(ctx, BatteryLevelContextKey) > self.threshold
+
+
+@frozen
+class InChargingArea(BTNode):
+    """
+    A condition node that reads the current vehicle position from the position context using a React-inspired use_context hook.
+    """
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return use_context(ctx, PositionContextKey) < 0.1
+
+
+@frozen
+class MoveTowardsChargingArea(BTNode):
+    """
+    Move the robot towards the charging area (position 0.0 of 0.0 to 100.0).
+    """
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        use_capture(ctx, RobotVelocityDemandsCaptureKey, -1.0)
+        return Running()
+
+
+@frozen
+class MoveTowards(BTNode):
+    """
+    Move the robot towards an arbitrary position, slowing down as it approaches the target.
+    """
+    destination: float
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        current_position = use_context(ctx, PositionContextKey)
+        desired_velocity = (self.destination - current_position) / 50.0
+        use_capture(ctx, RobotVelocityDemandsCaptureKey, desired_velocity)
+        return Running()
+
 ```
 
-## Usage
+This Behaviour Tree references two Contexts, the `BatteryLevelContextKey` and the `PositionContextKey` that are implicitly passed into the tree above by a Context Provider:
 
-```py
-from pybt2 import BaseClass
-from pybt2 import base_function
+```python
+@frozen
+class RobotState:
+    battery_level: float
+    position: float
 
-BaseClass().base_method()
-base_function()
+@frozen
+class RobotContextProvider(BTNode):
+    robot_state: RobotState
+    child: BTNode
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return ctx.evaluate_inline(
+            BatchContextProvider(
+                contexts={
+                    BatteryLevelContextKey: self.robot_state.battery_level,
+                    PositionContextKey: self.robot_state.position,
+                },
+                child=self.child,
+            )
+        )
 ```
 
-```bash
-$ python -m pybt2
-#or
-$ pybt2
+The full behaviour tree and its data dependencies can be visualised by running the tree in "analysis mode" (see `TestRobotVisualisation` in [`tests/behaviour_tree/test_robot.py`](tests/behaviour_tree/test_robot.py)):
+
+![](images/simple_robot_analysis.svg)
+
+In the diagram above:
+
+* Solid lines point from parent nodes to child nodes. These lines are labelled with the key that uniquely identifies this child in its parent node.
+* Dashed lines point from nodes to their long-range data dependencies. For example the nodes that read from the battery-level context or the robot position context have dashed arrows to those values stored in the tree. 
+
+The diagram also illustrates the use of Captures, which are the opposite of Contexts and can be used for gathering values from elsewhere in the tree. In this case, it is used for gathering robot velocity demands. Only the first velocity demand is passed to the simulator (see `RobotSimulator` in `tests/behaviour_tree/robot.py`).
+
+[react]: https://react.dev/
+[react-hooks]: https://react.dev/reference/react/hooks
+[behaviour-tree]: https://en.wikipedia.org/wiki/Behavior_tree_(artificial_intelligence,_robotics_and_control)
+[bt-paper]: https://arxiv.org/pdf/1709.00084.pdf
+
+## Incremental execution
+
+pybt2 supports incremental execution of function call graphs where:
+
+* the function and its arguments are represented by an immutable `attrs` class called "props"
+* each function call node (a `FibreNode object`) stores its previous props, result and other dependencies, and on subsequent executions if neither the props nor dependencies have changed, then the previous result will be returned
+
+For example, a Sequence node that evaluates its children in order and returns the first non-successful result looks like:
+
+```python
+@frozen
+class SequenceNode(BTNode):
+    children: Sequence[BTNode]
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        for child in self.children:
+            result = ctx.evaluate_child(child)
+            if not is_success(result):
+                return result
+        return Success()
 ```
+
+If an evaluated child of this SequenceNode is updated but still returns the same result (as determined by the `==` operator), then the SequenceNode will not be re-executed. However if one of the evaluated children changes its result, then the `SequenceNode` will be re-executed from the start. Its children however will only be re-executed if they are themselves out-of-date.  
+
+---
+
 
 ## Development
 

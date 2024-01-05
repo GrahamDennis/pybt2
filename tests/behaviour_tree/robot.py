@@ -107,6 +107,25 @@ class Robot:
 
 
 @frozen
+class SafeRobot(BTNode):
+    task: BTNode
+
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return PreconditionAction(precondition=GuaranteePowerSupply(), action=self.task)
+
+
+@frozen
+class GuaranteePowerSupply(BTNode):
+    def __call__(self, ctx: CallContext) -> BTNodeResult:
+        return PostconditionPreconditionAction(
+            postcondition=AnyOf(
+                BatteryLevelIsAtLeast(100.0), AllOf(Not(InChargingArea()), BatteryLevelIsAtLeast(20.0))
+            ),
+            actions=[MoveTowardsChargingArea()],
+        )
+
+
+@frozen
 class BatteryLevelIsAtLeast(BTNode):
     threshold: float
 
@@ -125,25 +144,6 @@ class MoveTowardsChargingArea(BTNode):
     def __call__(self, ctx: CallContext) -> BTNodeResult:
         use_capture(ctx, RobotVelocityDemandsCaptureKey, -1.0)
         return Running()
-
-
-@frozen
-class GuaranteePowerSupply(BTNode):
-    def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return PostconditionPreconditionAction(
-            postcondition=AnyOf(
-                BatteryLevelIsAtLeast(100.0), AllOf(Not(InChargingArea()), BatteryLevelIsAtLeast(20.0))
-            ),
-            actions=[MoveTowardsChargingArea()],
-        )
-
-
-@frozen
-class SafeRobot(BTNode):
-    task: BTNode
-
-    def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return PreconditionAction(precondition=GuaranteePowerSupply(), action=self.task)
 
 
 @frozen
