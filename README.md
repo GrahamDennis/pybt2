@@ -28,7 +28,8 @@ from pybt2.behaviour_tree.nodes import PreconditionAction, PostconditionPrecondi
 @frozen
 class SafeRobot(BTNode):
     """
-    Root behaviour tree node that ensures there's sufficient power before performing some other task.
+    Root behaviour tree node that ensures there's sufficient power before performing some
+    other task.
     """
     task: BTNode
 
@@ -41,12 +42,14 @@ class GuaranteePowerSupply(BTNode):
     """
     A subtree to maintain sufficient battery charge.
     
-    If the battery level falls below 20%, then move the robot towards the charging area and charge until full.
+    If the battery level falls below 20%, then move the robot towards the charging area and
+    charge until full.
     """
     def __call__(self, ctx: CallContext) -> BTNodeResult:
         return PostconditionPreconditionAction(
             postcondition=AnyOf(
-                BatteryLevelIsAtLeast(100.0), AllOf(Not(InChargingArea()), BatteryLevelIsAtLeast(20.0))
+                BatteryLevelIsAtLeast(100.0),
+                AllOf(Not(InChargingArea()), BatteryLevelIsAtLeast(20.0))
             ),
             actions=[MoveTowardsChargingArea()],
         )
@@ -55,7 +58,8 @@ class GuaranteePowerSupply(BTNode):
 @frozen
 class BatteryLevelIsAtLeast(BTNode):
     """
-    A condition node that reads the current battery level from the battery context using a React-inspired use_context hook.
+    A condition node that reads the current battery level from the battery context using a
+    React-inspired use_context hook.
     """
     threshold: float
 
@@ -66,7 +70,8 @@ class BatteryLevelIsAtLeast(BTNode):
 @frozen
 class InChargingArea(BTNode):
     """
-    A condition node that reads the current vehicle position from the position context using a React-inspired use_context hook.
+    A condition node that reads the current vehicle position from the position context using
+    a React-inspired use_context hook.
     """
     def __call__(self, ctx: CallContext) -> BTNodeResult:
         return use_context(ctx, PositionContextKey) < 0.1
