@@ -1,5 +1,6 @@
 import logging
 import tempfile
+from pathlib import Path
 from typing import Callable
 
 import pytest
@@ -74,11 +75,36 @@ class TestRobotVisualisation:
         @run_in_fibre(fibre, root_fibre_node)
         def execute(ctx: CallContext):
             return ctx.evaluate_child(
-                RobotSimulator(RobotState(battery_level=19, position=50), SafeRobot(MoveTowards(destination=100)))
+                RobotSimulator(
+                    RobotState(battery_level=19, position=50), SafeRobot(MoveTowards(destination=100), key="safe-robot")
+                )
             )
 
-        graph = DotRenderer(root_fibre_node).to_dot()
+        tempdir = tempfile.mkdtemp(prefix="test_visualise_robot")
+        logger.info("Creating images in %s", tempdir)
+        FORMAT = "svg"
+        with Path(tempdir, f"full_tree.{FORMAT}").open(mode="wb") as f:
+            renderer = DotRenderer()
+            renderer.render_fibre_node(root_fibre_node)
+            graph = renderer.get_dot()
+            f.write(graph.create(format=FORMAT))
 
-        with tempfile.NamedTemporaryFile(prefix="visualise_robot", suffix=".png", delete=False) as f:
-            f.write(graph.create(format="png"))
-            logger.info("Created image at %s", f.name)
+        safe_robot_node_key_path = (1, 1, 1, 2, "safe-robot")
+        safe_robot_node = root_fibre_node.get_fibre_node(safe_robot_node_key_path)
+        for idx in range(4):
+            with Path(tempdir, f"safe-robot-{idx}.{FORMAT}").open(mode="wb") as f:
+                renderer = DotRenderer()
+
+                renderer.render_fibre_node(safe_robot_node, maximum_evaluation_depth=idx)
+                graph = renderer.get_dot()
+                f.write(graph.create(format=FORMAT))
+
+        guarantee_power_supply_key_path = (1, 1)
+        guarantee_power_supply_node = safe_robot_node.get_fibre_node(guarantee_power_supply_key_path)
+        for idx in range(2):
+            with Path(tempdir, f"guarantee-power-supply-{idx}.{FORMAT}").open(mode="wb") as f:
+                renderer = DotRenderer()
+
+                renderer.render_fibre_node(guarantee_power_supply_node, maximum_evaluation_depth=idx)
+                graph = renderer.get_dot()
+                f.write(graph.create(format=FORMAT))
