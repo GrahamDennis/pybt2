@@ -151,23 +151,18 @@ The `DotRenderer` class can be used to produce visualisations of behaviour trees
 
 For example the `SafeRobot(MoveTowards(destination=100))` tree can be visualised in increasing levels of detail:
 
-<figure>
 
-![](images/safe-robot-0.svg)
+* Visualisation of an unevaluated `SafeRobot(MoveTowards(destination=100))` node
 
-<figcaption>Visualisation of an unevaluated <code>SafeRobot(MoveTowards(destination=100))</code> node</figcaption>
-</figure>
+  ![](images/safe-robot-0.svg)
 
-<figure>
+* Visualisation of the evaluation of `SafeRobot(MoveTowards(destination=100))` node
 
-![](images/safe-robot-1.svg)
+  ![](images/safe-robot-1.svg)
 
-<figcaption>Visualisation of the evaluation of <code>SafeRobot(MoveTowards(destination=100))</code> node</figcaption>
-</figure>
+* GuaranteePowerSupply can be visualised as:
 
-GuaranteePowerSupply can be visualised as:
-
-![](images/guarantee-power-supply-1.svg)
+  ![](images/guarantee-power-supply-1.svg)
 
 During normal execution, not every node in the behaviour tree will necessarily be evaluated. For example a Sequence node with 2 children won't evaluate the second child if the first child returns `Running`. To support visualisation and other kinds of tree analysis, nodes with early-return behaviour like this can support an "Analysis" execution mode (see the `SupportsAnalysis` abstract class) where all children are expected to be executed. Only nodes that return early need to subclass `SupportsAnalysis`.  This execution mode can be used to visualise the complete tree and validate that all required contexts are being provided.
 
