@@ -131,7 +131,7 @@ class RobotContextProvider(BTNode):
 
 The full behaviour tree and its data dependencies can be visualised by running the tree in "analysis mode" (see `TestRobotVisualisation` in [`tests/behaviour_tree/test_robot.py`](tests/behaviour_tree/test_robot.py)):
 
-![](images/simple_robot_full_tree.svg)
+![](images/simple_robot_full_tree.png)
 
 In the diagram above:
 
@@ -154,15 +154,15 @@ For example the `SafeRobot(MoveTowards(destination=100))` tree can be visualised
 
 * Visualisation of an unevaluated `SafeRobot(MoveTowards(destination=100))` node
 
-  ![](images/safe-robot-0.svg)
+  ![](images/safe-robot-0.png)
 
 * Visualisation of the evaluation of `SafeRobot(MoveTowards(destination=100))` node
 
-  ![](images/safe-robot-1.svg)
+  ![](images/safe-robot-1.png)
 
 * GuaranteePowerSupply can be visualised as:
 
-  ![](images/guarantee-power-supply-1.svg)
+  ![](images/guarantee-power-supply-1.png)
 
 During normal execution, not every node in the behaviour tree will necessarily be evaluated. For example a Sequence node with 2 children won't evaluate the second child if the first child returns `Running`. To support visualisation and other kinds of tree analysis, nodes with early-return behaviour like this can support an "Analysis" execution mode (see the `SupportsAnalysis` abstract class) where all children are expected to be executed. Only nodes that return early need to subclass `SupportsAnalysis`.  This execution mode can be used to visualise the complete tree and validate that all required contexts are being provided.
 

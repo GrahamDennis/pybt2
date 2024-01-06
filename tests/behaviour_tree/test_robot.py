@@ -82,7 +82,7 @@ class TestRobotVisualisation:
 
         tempdir = tempfile.mkdtemp(prefix="test_visualise_robot")
         logger.info("Creating images in %s", tempdir)
-        FORMAT = "svg"
+        FORMAT = "png"
         with Path(tempdir, f"full_tree.{FORMAT}").open(mode="wb") as f:
             renderer = DotRenderer()
             renderer.render_fibre_node(root_fibre_node)
