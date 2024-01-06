@@ -151,9 +151,19 @@ The `DotRenderer` class can be used to produce visualisations of behaviour trees
 
 For example the `SafeRobot(MoveTowards(destination=100))` tree can be visualised in increasing levels of detail:
 
+<figure>
+
 ![](images/safe-robot-0.svg)
 
+<figcaption>Visualisation of an unevaluated <code>SafeRobot(MoveTowards(destination=100))</code> node</figcaption>
+</figure>
+
+<figure>
+
 ![](images/safe-robot-1.svg)
+
+<figcaption>Visualisation of the evaluation of <code>SafeRobot(MoveTowards(destination=100))</code> node</figcaption>
+</figure>
 
 GuaranteePowerSupply can be visualised as:
 
