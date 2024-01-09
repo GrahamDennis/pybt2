@@ -26,23 +26,17 @@ class SequenceNode(BTNode, SupportsAnalysis):
     analysis_mode: bool = field(default=False, repr=False)
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
+        child_results: list[Result] = []
+        for child in self.children:
+            child_result = ctx.evaluate_child(child)
+            if not is_success(child_result) and not self.analysis_mode:
+                return child_result
+            child_results.append(child_result)
         if self.analysis_mode:
-            return self.evaluate_in_analysis_mode(ctx)
-        for child in self.children:
-            result = ctx.evaluate_child(child)
-            if not is_success(result):
-                return result
-        return Success()
-
-    def evaluate_in_analysis_mode(self, ctx: CallContext) -> BTNodeResult:
-        results: list[Result] = []
-        for child in self.children:
-            results.append(ctx.evaluate_child(child))
-
-        for result in results:
-            if not is_success(result):
-                return result
-        return Success()
+            for child_result in child_results:
+                if not is_success(child_result):
+                    return child_result
+        return Success([child_result.value for child_result in child_results])
 
     @classmethod
     @override
@@ -67,23 +61,17 @@ class FallbackNode(BTNode, SupportsAnalysis):
     analysis_mode: bool = field(default=False, repr=False)
 
     def __call__(self, ctx: CallContext) -> BTNodeResult:
+        child_results: list[Result] = []
+        for child in self.children:
+            child_result = ctx.evaluate_child(child)
+            if not is_failure(child_result) and not self.analysis_mode:
+                return child_result
+            child_results.append(child_result)
         if self.analysis_mode:
-            return self.evaluate_in_analysis_mode(ctx)
-        for child in self.children:
-            result = ctx.evaluate_child(child)
-            if not is_failure(result):
-                return result
-        return Failure()
-
-    def evaluate_in_analysis_mode(self, ctx: CallContext) -> BTNodeResult:
-        results: list[Result] = []
-        for child in self.children:
-            results.append(ctx.evaluate_child(child))
-
-        for result in results:
-            if not is_failure(result):
-                return result
-        return Success()
+            for child_result in child_results:
+                if not is_failure(child_result):
+                    return child_result
+        return Failure([child_result.value for child_result in child_results])
 
     @classmethod
     @override
@@ -104,20 +92,26 @@ AnyOf = Fallback
 
 @frozen
 class AlwaysSuccess(BTNode):
+    value: typing.Any = None
+
     def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return Success()
+        return Success(self.value)
 
 
 @frozen
 class AlwaysFailure(BTNode):
+    value: typing.Any = None
+
     def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return Failure()
+        return Failure(self.value)
 
 
 @frozen
 class AlwaysRunning(BTNode):
+    value: typing.Any = None
+
     def __call__(self, ctx: CallContext) -> BTNodeResult:
-        return Running()
+        return Running(self.value)
 
 
 @frozen

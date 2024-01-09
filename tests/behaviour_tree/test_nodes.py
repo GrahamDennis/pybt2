@@ -37,9 +37,11 @@ def test_sequence_returns_success_if_all_children_succeed(
 ):
     @run_in_fibre(fibre, bt_root_fibre_node)
     def execute(_ctx: CallContext) -> BTNodeResult:
-        return Sequence(AlwaysSuccess(key="child1"), AlwaysSuccess(key="child2"), key="sequence")
+        return Sequence(
+            AlwaysSuccess(key="child1", value="first"), AlwaysSuccess(key="child2", value="second"), key="sequence"
+        )
 
-    assert execute.result == Success()
+    assert execute.result == Success(["first", "second"])
 
     test_instrumentation.assert_evaluations_and_reset(("sequence",), ("sequence", "child1"), ("sequence", "child2"))
 
@@ -74,9 +76,11 @@ def test_fallback_returns_failure_if_all_children_succeed(
 ):
     @run_in_fibre(fibre, bt_root_fibre_node)
     def execute(_ctx: CallContext) -> BTNodeResult:
-        return Fallback(AlwaysFailure(key="child1"), AlwaysFailure(key="child2"), key="fallback")
+        return Fallback(
+            AlwaysFailure(key="child1", value="first"), AlwaysFailure(key="child2", value="second"), key="fallback"
+        )
 
-    assert execute.result == Failure()
+    assert execute.result == Failure(["first", "second"])
 
     test_instrumentation.assert_evaluations_and_reset(("fallback",), ("fallback", "child1"), ("fallback", "child2"))
 

@@ -34,9 +34,9 @@ def test_tick_always_running_robot(create_robot_ticker: RobotFactory):
 
 def test_tick_guarantee_power_supply_with_full_battery(create_robot_ticker: RobotFactory):
     robot = create_robot_ticker(RobotState(battery_level=100, position=50))
-    assert robot.tick(GuaranteePowerSupply()) == (Success(), RobotState(battery_level=99.9, position=50))
+    assert robot.tick(GuaranteePowerSupply()) == (Success([None, None]), RobotState(battery_level=99.9, position=50))
     result, robot_state = robot.tick(GuaranteePowerSupply())
-    assert result == Success()
+    assert result == Success([None, None])
     assert robot_state.battery_level == pytest.approx(99.8)
     assert robot_state.position == 50
 
