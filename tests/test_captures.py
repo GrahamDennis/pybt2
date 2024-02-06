@@ -151,16 +151,19 @@ def test_incremental_capture(
         ("capture-root", "__CaptureRoot.Consumer"),
     )
 
-    assert (use_state_node_state := use_state_node.get_fibre_node_state()) is not None
+    use_state_node_state = use_state_node.get_fibre_node_state()
+    assert use_state_node_state is not None
     use_state_node_state.result[1](2)
 
     if fibre.incremental:
         fibre.drain_work_queue()
     else:
-        assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
+        root_fibre_node_state = root_fibre_node.get_fibre_node_state()
+        assert root_fibre_node_state is not None
         fibre.run(root_fibre_node, root_fibre_node_state.props)
 
-    assert (root_fibre_node_state := root_fibre_node.get_fibre_node_state()) is not None
+    root_fibre_node_state = root_fibre_node.get_fibre_node_state()
+    assert root_fibre_node_state is not None
     assert root_fibre_node_state.result == (None, {capture_leaf_node: 2})
 
     if fibre.incremental:

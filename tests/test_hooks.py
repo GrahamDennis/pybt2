@@ -186,7 +186,8 @@ class TestUseResource:
         assert execute.result == 1
 
         use_resource_node = root_fibre_node.get_fibre_node(("use_resource",))
-        assert (use_resource_node_state := use_resource_node.get_fibre_node_state()) is not None
+        use_resource_node_state = use_resource_node.get_fibre_node_state()
+        assert use_resource_node_state is not None
         assert use_resource_node_state.state is None
 
         try:

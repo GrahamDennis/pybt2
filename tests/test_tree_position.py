@@ -22,7 +22,8 @@ def test_can_calculate_tree_position(
             )
         )
         evaluate_children_node = ctx.get_last_child()
-        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        evaluate_children_node_state = evaluate_children_node.get_fibre_node_state()
+        assert evaluate_children_node_state is not None
         child_1, child_2 = evaluate_children_node_state.children
         position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
         position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
@@ -49,7 +50,8 @@ def test_can_calculate_tree_position(
             )
         )
         evaluate_children_node = ctx.get_last_child()
-        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        evaluate_children_node_state = evaluate_children_node.get_fibre_node_state()
+        assert evaluate_children_node_state is not None
         child_2, child_1 = evaluate_children_node_state.children
         position_1 = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position-1"))
         position_2 = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position-2"))
@@ -208,7 +210,8 @@ def test_can_change_tree_position(
             )
         )
         evaluate_children_node = ctx.get_last_child()
-        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        evaluate_children_node_state = evaluate_children_node.get_fibre_node_state()
+        assert evaluate_children_node_state is not None
         child_1, child_2 = evaluate_children_node_state.children
         position = ctx.evaluate_child(ReturnTreePosition(child_1, None, key="tree-position"))
 
@@ -229,7 +232,8 @@ def test_can_change_tree_position(
             )
         )
         evaluate_children_node = ctx.get_last_child()
-        assert (evaluate_children_node_state := evaluate_children_node.get_fibre_node_state()) is not None
+        evaluate_children_node_state = evaluate_children_node.get_fibre_node_state()
+        assert evaluate_children_node_state is not None
         child_1, child_2 = evaluate_children_node_state.children
         position = ctx.evaluate_child(ReturnTreePosition(child_2, None, key="tree-position"))
 
