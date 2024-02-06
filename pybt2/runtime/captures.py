@@ -59,7 +59,8 @@ class CaptureConsumer(FibreNodeFunction[Mapping[FibreNode, T], None, CaptureEntr
                     assert_never(update)
         result: dict[FibreNode, T] = {}
         for capture in captures:
-            assert (capture_fibre_node_state := capture.get_fibre_node_state()) is not None
+            capture_fibre_node_state = capture.get_fibre_node_state()
+            assert capture_fibre_node_state is not None
             result[capture] = capture_fibre_node_state.result
 
         return FibreNodeState(
