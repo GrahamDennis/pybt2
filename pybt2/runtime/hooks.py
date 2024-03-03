@@ -7,7 +7,6 @@ from typing_extensions import Self, override
 from pybt2.runtime.fibre import CallContext
 from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.types import (
-    NO_DEPENDENCIES,
     Dependencies,
     FibreNodeFunction,
     FibreNodeState,
@@ -20,13 +19,38 @@ from pybt2.runtime.types import (
 
 T = TypeVar("T")
 
+
+@frozen(weakref_slot=False)
+class UseVersionHook(FibreNodeFunction[int, None, None]):
+    dependencies: Dependencies
+
+    @override
+    def run(
+        self,
+        ctx: CallContext,
+        previous_state: Optional[FibreNodeState[Self, int, None]],
+        enqueued_updates: Iterator[None],
+    ) -> FibreNodeState[Self, int, None]:
+        result: int
+        if previous_state is not None:
+            if previous_state.props.dependencies == self.dependencies:
+                return previous_state
+            result = previous_state.result + 1
+        else:
+            result = 1
+        return ctx.create_fibre_node_state(props=self, result=result, state=None)
+
+
+def use_version(ctx: CallContext, dependencies: Dependencies, key: Optional[Key] = None) -> int:
+    return ctx.evaluate_child(UseVersionHook(dependencies=dependencies), key=key)
+
+
 UseStateResult = Tuple[T, Setter[T]]
 
 
 @frozen(weakref_slot=False)
 class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Generic[T]):
     value: T = field(eq=False)
-    dependencies: Dependencies = NO_DEPENDENCIES
 
     @override
     def run(
@@ -40,13 +64,10 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
 
         if previous_state is not None:
             previous_value, previous_setter = previous_state.result
+            value = previous_value
             setter = previous_setter
-            if self.dependencies != previous_state.props.dependencies:
-                value = self.value
-            else:
-                value = previous_value
-                for update in enqueued_updates:
-                    value = cast(Callable[[T], T], update)(value) if callable(update) else cast(T, update)
+            for update in enqueued_updates:
+                value = cast(Callable[[T], T], update)(value) if callable(update) else cast(T, update)
             if value == previous_value:
                 return previous_state
         else:
@@ -62,10 +83,8 @@ class UseStateHook(FibreNodeFunction[UseStateResult[T], None, Reducer[T]], Gener
         return ctx.create_fibre_node_state(props=self, result=(value, setter), state=None)
 
 
-def use_state(
-    ctx: CallContext, value: T, dependencies: Dependencies = NO_DEPENDENCIES, key: Optional[Key] = None
-) -> Tuple[T, Setter[T]]:
-    return ctx.evaluate_child(UseStateHook(value, dependencies=dependencies), key=key)
+def use_state(ctx: CallContext, value: T, key: Optional[Key] = None) -> Tuple[T, Setter[T]]:
+    return ctx.evaluate_child(UseStateHook(value), key=key)
 
 
 UseResourceHookResourceFactory = Callable[[OnDispose], T]
@@ -183,9 +202,8 @@ class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
     loop: Optional[asyncio.AbstractEventLoop] = field(eq=False, default=None, repr=False)
 
     def __call__(self, ctx: CallContext) -> AsyncResult[T]:
-        async_result, set_async_result = use_state(
-            ctx, cast(AsyncResult[T], _ASYNC_RUNNING), dependencies=self.dependencies, key="result"
-        )
+        dependencies_version = use_version(ctx, self.dependencies, key="version")
+        async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key=dependencies_version)
 
         def construct_awaitable(on_dispose: OnDispose) -> asyncio.Task[T]:
             def on_done(completed_task: asyncio.Task[T]) -> None:
