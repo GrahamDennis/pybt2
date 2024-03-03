@@ -58,7 +58,10 @@ async def test_use_api_call(
     set_async_result(AsyncSuccess("Hello Wally"))
     assert use_state_node.is_out_of_date()
 
-    fibre.drain_work_queue()
+    if fibre.incremental:
+        fibre.drain_work_queue()
+
+        test_instrumentation.assert_evaluations_and_reset(("capture-root", "use_api_call"), ("capture-root",))
 
     @run_in_fibre(fibre, root_fibre_node)
     def execute_2(ctx: CallContext) -> tuple[AsyncResult[str], Mapping[FibreNode, str]]:
@@ -67,6 +70,16 @@ async def test_use_api_call(
                 CaptureKey(ExampleService.hello), UseApiChild(key="use-api-child"), key="capture-root"
             )
         )
+
+    test_instrumentation.assert_evaluations_and_reset(
+        *[
+            ("capture-root",),
+            ("capture-root", "use_api_call"),
+            ("capture-root",),
+        ]
+        if not fibre.incremental
+        else []
+    )
 
     fibre_node_state = use_state_node.get_fibre_node_state()
     assert fibre_node_state is not None
