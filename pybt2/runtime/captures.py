@@ -87,7 +87,7 @@ class UnorderedCaptureProvider(
     ) -> FibreNodeState[Self, tuple[ResultT, Mapping[FibreNode, T]], None]:
         capture_consumer_node = ctx.get_child_fibre_node(CaptureConsumer, CAPTURE_CONSUMER_KEY)
 
-        child_result = ctx.evaluate_child(
+        child_result = ctx.evaluate_child_raw(
             self.child, key=None, additional_contexts={self.capture_key: capture_consumer_node}
         )
         child_node = ctx.get_last_child()
@@ -95,8 +95,8 @@ class UnorderedCaptureProvider(
         capture_consumer_result = ctx.fibre.run(capture_consumer_node, CaptureConsumer[T]())
         return FibreNodeState(
             props=self,
-            result=(child_result, capture_consumer_result.result),
-            result_version=capture_consumer_result.result_version,
+            result=(child_result.result, capture_consumer_result.result),
+            result_version=child_result.result_version + capture_consumer_result.result_version,
             state=None,
             children=(child_node, capture_consumer_node),
         )

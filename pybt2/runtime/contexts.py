@@ -4,13 +4,13 @@ from attr import frozen
 
 from pybt2.runtime.fibre import CallContext, FibreNode
 from pybt2.runtime.function_call import RuntimeCallableProps
-from pybt2.runtime.types import AbstractContextKey, ContextKey, FibreNodeFunction, ResultT
+from pybt2.runtime.types import ContextKey, FibreNodeFunction, ResultT
 
 T = TypeVar("T")
 
 
 def _context_value_key(context_key: ContextKey[T]) -> str:
-    return f"__ContextProvider.Value.{context_key.name}"
+    return f"__ContextProvider.Value.{context_key.id}"
 
 
 @frozen(weakref_slot=False)
@@ -30,7 +30,7 @@ class ContextProvider(RuntimeCallableProps[ResultT], Generic[T, ResultT]):
     def __call__(self, ctx: CallContext) -> ResultT:
         ctx.evaluate_child(ContextValue(self.value, key=_context_value_key(self.context_key)))
         context_value_node = ctx.get_last_child()
-        context_map: dict[AbstractContextKey, FibreNode] = {self.context_key: context_value_node}
+        context_map: dict[Any, FibreNode] = {self.context_key: context_value_node}
         return ctx.evaluate_child(self.child, additional_contexts=context_map)
 
 
@@ -40,7 +40,7 @@ class BatchContextProvider(RuntimeCallableProps[ResultT], Generic[ResultT]):
     child: FibreNodeFunction[ResultT, Any, Any]
 
     def __call__(self, ctx: CallContext) -> ResultT:
-        context_nodes: dict[AbstractContextKey, FibreNode] = {}
+        context_nodes: dict[Any, FibreNode] = {}
         for context_key, context_value in self.contexts.items():
             ctx.evaluate_child(ContextValue(context_value), key=_context_value_key(context_key))
             context_nodes[context_key] = ctx.get_last_child()

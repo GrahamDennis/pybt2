@@ -15,6 +15,7 @@ from typing import (
     Sequence,
     Type,
     cast,
+    final,
 )
 
 from attr import Factory, field, frozen, mutable, setters
@@ -26,7 +27,6 @@ from pybt2.runtime.instrumentation import FibreInstrumentation, NoOpFibreInstrum
 from pybt2.runtime.types import (
     NO_CHILDREN,
     NO_PREDECESSORS,
-    AbstractContextKey,
     FibreNodeFunction,
     FibreNodeState,
     Key,
@@ -47,11 +47,11 @@ def _get_fibre_node_key_path(fibre_node: "FibreNode") -> KeyPath:
         return *fibre_node.parent.key_path, fibre_node.key
 
 
-def _get_contexts(fibre_node: Optional["FibreNode"]) -> ChainMap[AbstractContextKey, "FibreNode"]:
-    return fibre_node.contexts if fibre_node is not None else ChainMap[AbstractContextKey, "FibreNode"]()
+def _get_contexts(fibre_node: Optional["FibreNode"]) -> ChainMap[Any, "FibreNode"]:
+    return fibre_node.contexts if fibre_node is not None else ChainMap[Any, "FibreNode"]()
 
 
-def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[AbstractContextKey, "FibreNode"]:
+def _get_parent_contexts(fibre_node: "FibreNode") -> ChainMap[Any, "FibreNode"]:
     return _get_contexts(fibre_node.parent)
 
 
@@ -88,18 +88,27 @@ class CallContext(metaclass=ABCMeta):
         self,
         props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
     ) -> "FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]":
         ...
 
     @abstractmethod
+    def evaluate_child_raw(
+        self,
+        props: FibreNodeFunction[ResultT, StateT, UpdateT],
+        key: Optional[Key] = None,
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
+    ) -> FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]:
+        ...
+
+    @final
     def evaluate_child(
         self,
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
     ) -> ResultT:
-        ...
+        return self.evaluate_child_raw(props, key, additional_contexts).result
 
     @abstractmethod
     def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
@@ -163,7 +172,7 @@ class DefaultCallContext(CallContext):
         self,
         props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
     ) -> "FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]":
         child_key = self._next_child_key(key)
         previous_child_fibre_node: Optional[FibreNode] = self._get_previous_child_with_key(child_key)
@@ -178,26 +187,23 @@ class DefaultCallContext(CallContext):
                 key=child_key,
                 parent=self.fibre_node,
                 props_type=props_type,
-                contexts=self.fibre_node.contexts.new_child(
-                    cast(MutableMapping[AbstractContextKey, FibreNode], additional_contexts)
-                )
+                contexts=self.fibre_node.contexts.new_child(cast(MutableMapping[Any, FibreNode], additional_contexts))
                 if additional_contexts is not None
                 else self.fibre_node.contexts,
             )
 
     @override
-    def evaluate_child(
+    def evaluate_child_raw(
         self,
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
-    ) -> ResultT:
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
+    ) -> FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]:
         child_fibre_node = self.get_child_fibre_node(
             type(props), key=key if key is not None else props.key, additional_contexts=additional_contexts
         )
         self._add_child(child_fibre_node)
-        child_fibre_node_state = self.fibre.run(child_fibre_node, props)
-        return child_fibre_node_state.result
+        return self.fibre.run(child_fibre_node, props)
 
     @override
     def evaluate_inline(self, props: FibreNodeFunction[ResultT, None, None]) -> ResultT:
@@ -255,7 +261,7 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
     key_path: KeyPath = field(
         init=False, default=Factory(_get_fibre_node_key_path, takes_self=True), on_setattr=setters.frozen
     )
-    contexts: ChainMap[AbstractContextKey, "FibreNode"] = field(
+    contexts: ChainMap[Any, "FibreNode"] = field(
         default=Factory(_get_parent_contexts, takes_self=True), on_setattr=setters.frozen
     )
 
@@ -352,7 +358,6 @@ class FibreNode(Generic[PropsT, ResultT, StateT, UpdateT]):
         ctx = fibre.call_context_factory.create_call_context(
             fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state
         )
-        DefaultCallContext(fibre=fibre, fibre_node=self, previous_state=previous_fibre_node_state)
         next_fibre_node_state = cast(FibreNodeFunction[ResultT, StateT, UpdateT], props).run(
             ctx,
             previous_state=previous_fibre_node_state,

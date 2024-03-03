@@ -18,6 +18,7 @@ from pybt2.runtime.hooks import (
     use_memo,
     use_resource,
     use_state,
+    use_version,
 )
 from pybt2.runtime.types import OnDispose, Setter
 
@@ -339,3 +340,30 @@ class TestUseAsync:
 
         assert execute_2.result == AsyncFailure(exception=exception_to_raise)
         test_instrumentation.assert_evaluations_and_reset(("use_async",))
+
+
+@pytest.mark.known_keys("use_version")
+def test_use_version(fibre: Fibre, root_fibre_node: FibreNode, test_instrumentation: CallRecordingInstrumentation):
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_1(ctx: CallContext) -> int:
+        return use_version(ctx, [1], key="use_version")
+
+    assert execute_1.result == 1
+    test_instrumentation.assert_evaluations_and_reset(("use_version",))
+
+    # keeping the dependencies the same shouldn't change the version
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_2(ctx: CallContext) -> int:
+        return use_version(ctx, [1], key="use_version")
+
+    assert execute_2.result == 1
+
+    test_instrumentation.assert_evaluations_and_reset(("use_version",) if not fibre.incremental else None)
+
+    # change the dependencies and that increments the version
+    @run_in_fibre(fibre, root_fibre_node)
+    def execute_3(ctx: CallContext) -> int:
+        return use_version(ctx, [2], key="use_version")
+
+    assert execute_3.result == 2
+    test_instrumentation.assert_evaluations_and_reset(("use_version",))

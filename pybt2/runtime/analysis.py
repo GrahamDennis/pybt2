@@ -1,12 +1,11 @@
 from abc import ABCMeta, abstractmethod
-from typing import Mapping, Optional, Type
+from typing import Any, Mapping, Optional, Type
 
 from attr import frozen
 from typing_extensions import override
 
 from pybt2.runtime.fibre import CallContext, CallContextFactory, Fibre, FibreNode
 from pybt2.runtime.types import (
-    AbstractContextKey,
     FibreNodeFunction,
     FibreNodeState,
     Key,
@@ -53,7 +52,7 @@ class CallContextForAnalysis(CallContext):
         self,
         props_type: Type[FibreNodeFunction[ResultT, StateT, UpdateT]],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
     ) -> "FibreNode[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT, UpdateT]":
         return self.ctx.get_child_fibre_node(
             props_type.get_props_type_for_analysis() if issubclass(props_type, SupportsAnalysis) else props_type,
@@ -62,13 +61,13 @@ class CallContextForAnalysis(CallContext):
         )
 
     @override
-    def evaluate_child(
+    def evaluate_child_raw(
         self,
         props: FibreNodeFunction[ResultT, StateT, UpdateT],
         key: Optional[Key] = None,
-        additional_contexts: Optional[Mapping[AbstractContextKey, "FibreNode"]] = None,
-    ) -> ResultT:
-        return self.ctx.evaluate_child(
+        additional_contexts: Optional[Mapping[Any, "FibreNode"]] = None,
+    ) -> FibreNodeState[FibreNodeFunction[ResultT, StateT, UpdateT], ResultT, StateT]:
+        return self.ctx.evaluate_child_raw(
             props.get_props_for_analysis() if isinstance(props, SupportsAnalysis) else props, key, additional_contexts
         )
 

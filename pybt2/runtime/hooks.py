@@ -19,6 +19,32 @@ from pybt2.runtime.types import (
 
 T = TypeVar("T")
 
+
+@frozen(weakref_slot=False)
+class UseVersionHook(FibreNodeFunction[int, None, None]):
+    dependencies: Dependencies
+
+    @override
+    def run(
+        self,
+        ctx: CallContext,
+        previous_state: Optional[FibreNodeState[Self, int, None]],
+        enqueued_updates: Iterator[None],
+    ) -> FibreNodeState[Self, int, None]:
+        result: int
+        if previous_state is not None:
+            if previous_state.props.dependencies == self.dependencies:
+                return previous_state
+            result = previous_state.result + 1
+        else:
+            result = 1
+        return ctx.create_fibre_node_state(props=self, result=result, state=None)
+
+
+def use_version(ctx: CallContext, dependencies: Dependencies, key: Optional[Key] = None) -> int:
+    return ctx.evaluate_child(UseVersionHook(dependencies=dependencies), key=key)
+
+
 UseStateResult = Tuple[T, Setter[T]]
 
 
@@ -176,7 +202,8 @@ class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
     loop: Optional[asyncio.AbstractEventLoop] = field(eq=False, default=None, repr=False)
 
     def __call__(self, ctx: CallContext) -> AsyncResult[T]:
-        async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key="result")
+        dependencies_version = use_version(ctx, self.dependencies, key="version")
+        async_result, set_async_result = use_state(ctx, cast(AsyncResult[T], _ASYNC_RUNNING), key=dependencies_version)
 
         def construct_awaitable(on_dispose: OnDispose) -> asyncio.Task[T]:
             def on_done(completed_task: asyncio.Task[T]) -> None:
@@ -195,7 +222,6 @@ class UseAsync(RuntimeCallableProps[AsyncResult[T]], Generic[T]):
             return task
 
         use_resource(ctx, construct_awaitable, self.dependencies, key="task")
-
         return async_result
 
 

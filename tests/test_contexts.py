@@ -11,7 +11,7 @@ from pybt2.runtime.types import ContextKey
 from .instrumentation import CallRecordingInstrumentation
 from .utils import EvaluateChild, ReturnArgument, run_in_fibre
 
-IntContextKey = ContextKey[int]("IntContextKey")
+IntContextKey = ContextKey[int].create_unique("IntContextKey")
 
 T = TypeVar("T")
 
@@ -194,9 +194,9 @@ def test_can_create_context_without_using_value(
     test_instrumentation.assert_evaluations_and_reset(("context-provider",), ("context-provider", "child"))
 
 
-def test_context_keys_use_identity_equality():
-    context_key_1 = ContextKey[int]("context")
-    context_key_2 = ContextKey[int]("context")
+def test_context_keys_use_identity_equality_when_created_via_unique():
+    context_key_1 = ContextKey[int].create_unique("context")
+    context_key_2 = ContextKey[int].create_unique("context")
 
     assert context_key_1 != context_key_2
     assert hash(context_key_1) != hash(context_key_2)

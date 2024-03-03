@@ -68,19 +68,24 @@ class FibreNodeState(Generic[PropsT, ResultT, StateT]):
     tree_structure_predecessors: Sequence["FibreNode"] = NO_PREDECESSORS
 
 
-class AbstractContextKey(metaclass=ABCMeta):
-    def __eq__(self, other: Any) -> bool:
-        return self is other
-
-    def __hash__(self) -> int:
-        return id(self)
-
-
 @frozen(eq=False, weakref_slot=False)
-class ContextKey(AbstractContextKey, Generic[T]):
-    name: str
+class UniqueString:
+    value: str
 
 
-@frozen(eq=False, weakref_slot=False)
-class CaptureKey(AbstractContextKey, Generic[T]):
-    name: str
+@frozen(weakref_slot=False)
+class ContextKey(Generic[T]):
+    id: Any
+
+    @classmethod
+    def create_unique(cls, name: str) -> "ContextKey[T]":
+        return cls(UniqueString(name))
+
+
+@frozen(weakref_slot=False)
+class CaptureKey(Generic[T]):
+    id: Any
+
+    @classmethod
+    def create_unique(cls, name: str) -> "CaptureKey[T]":
+        return cls(UniqueString(name))

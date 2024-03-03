@@ -44,9 +44,9 @@ def next_robot_state(robot_state: RobotState, demands: RobotDemands) -> RobotSta
     )
 
 
-BatteryLevelContextKey = ContextKey[float]("BatteryLevelContext")
-PositionContextKey = ContextKey[float]("PositionContext")
-RobotVelocityDemandsCaptureKey = CaptureKey[float]("VelocityDemandsCapture")
+BatteryLevelContextKey = ContextKey[float].create_unique("BatteryLevelContext")
+PositionContextKey = ContextKey[float].create_unique("PositionContext")
+RobotVelocityDemandsCaptureKey = CaptureKey[float].create_unique("VelocityDemandsCapture")
 
 
 @frozen
