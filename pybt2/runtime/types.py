@@ -33,6 +33,7 @@ Dependencies = Sequence[Any]
 
 NO_PREDECESSORS: Sequence["FibreNode"] = ()
 NO_CHILDREN: Sequence["FibreNode"] = NO_PREDECESSORS
+NO_DEPENDENCIES: Dependencies = ()
 _EMPTY_ITERATOR: Iterator[Any] = iter(())
 
 
