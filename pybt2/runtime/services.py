@@ -1,4 +1,6 @@
+import typing
 from typing import (
+    Any,
     Awaitable,
     Callable,
     Generic,
@@ -9,7 +11,8 @@ from typing import (
 
 from attr import frozen
 
-from pybt2.runtime.captures import use_capture
+from pybt2.runtime.captures import OrderedCaptureProvider, use_capture
+from pybt2.runtime.contexts import ContextProvider
 from pybt2.runtime.fibre import CallContext
 from pybt2.runtime.function_call import RuntimeCallableProps
 from pybt2.runtime.hooks import (
@@ -18,11 +21,13 @@ from pybt2.runtime.hooks import (
     use_state,
     use_version,
 )
-from pybt2.runtime.types import CaptureKey, Dependencies, Key, Setter
+from pybt2.runtime.types import CaptureKey, ContextKey, Dependencies, Key, Setter
 
+T = TypeVar("T")
 ApiT = TypeVar("ApiT")
 RequestT = TypeVar("RequestT")
 ResponseT = TypeVar("ResponseT")
+
 
 _ASYNC_RUNNING = AsyncRunning()
 
@@ -61,3 +66,30 @@ def use_api_call(
         UseApiCall(api=api, request=request, dependencies=dependencies if dependencies is not None else [request]),
         key=key,
     )
+
+
+@frozen(weakref_slot=False)
+class ApiCallContextProvider(RuntimeCallableProps[T], Generic[T, RequestT, ResponseT]):
+    capture_key: CaptureKey[ApiCall[RequestT, ResponseT]]
+    context_key: ContextKey[typing.Sequence[ApiCall[RequestT, ResponseT]]]
+    child: RuntimeCallableProps[T]
+    api_call_evaluator: RuntimeCallableProps[Any]
+
+    @staticmethod
+    def create(
+        api: Callable[[ApiT, RequestT], Awaitable[ResponseT]],
+        child: RuntimeCallableProps[T],
+        api_call_evaluator: RuntimeCallableProps[Any],
+    ) -> "ApiCallContextProvider[T, RequestT, ResponseT]":
+        return ApiCallContextProvider(
+            capture_key=CaptureKey(api), context_key=ContextKey(api), child=child, api_call_evaluator=api_call_evaluator
+        )
+
+    def __call__(self, ctx: CallContext) -> T:
+        child_result, ordered_api_calls = ctx.evaluate_child(
+            OrderedCaptureProvider[T, ApiCall[RequestT, ResponseT]](self.capture_key, self.child)
+        )
+
+        ctx.evaluate_child(ContextProvider(self.context_key, ordered_api_calls, self.api_call_evaluator))
+
+        return child_result
